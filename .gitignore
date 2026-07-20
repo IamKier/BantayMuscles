@@ -31,6 +31,8 @@ yarn-error.*
 *.pem
 
 # local env files
+# `.env*.local` alone does NOT match a plain `.env` — list it explicitly.
+.env
 .env*.local
 
 # typescript

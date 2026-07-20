@@ -9,19 +9,36 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
+    text: '#0B0D0E',
+    background: '#F7F8FA',
+    backgroundElement: '#FFFFFF',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    border: '#E6E8EC',
+    accent: '#16A34A',
+    accentMuted: '#DCFCE7',
+    track: '#E6E8EC',
+    danger: '#DC2626',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
+    text: '#FFFFFF',
+    background: '#0B0D0E',
+    backgroundElement: '#17191C',
     backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    textSecondary: '#9BA1A9',
+    border: '#26292E',
+    accent: '#4ADE80',
+    accentMuted: '#14301F',
+    track: '#26292E',
+    danger: '#F87171',
   },
+} as const;
+
+/** Macro colors are intentionally scheme-independent so charts stay recognizable. */
+export const MacroColors = {
+  protein: '#3B82F6',
+  carbs: '#F59E0B',
+  fat: '#EC4899',
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
