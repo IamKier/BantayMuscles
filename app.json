@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "com.bantaymuscles.app",
+      "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION"
       ],
