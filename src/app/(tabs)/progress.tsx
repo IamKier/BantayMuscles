@@ -1,12 +1,14 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
+import { MacroDonut } from '@/components/macro-donut';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WeightCard } from '@/components/weight-card';
-import { MacroColors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useEntries, useGoals } from '@/hooks/use-store';
 import { useTheme } from '@/hooks/use-theme';
 import { shiftDateKey, sumMacros, toDateKey } from '@/lib/nutrition';
@@ -73,6 +75,22 @@ export default function ProgressScreen() {
       }
     : { protein: 0, carbs: 0, fat: 0 };
 
+  // The logged day closest to the calorie goal — a small "you nailed it" moment.
+  const bestDay = logged.length
+    ? logged.reduce((best, day) =>
+        Math.abs(day.totals.calories - goals.calories) <
+        Math.abs(best.totals.calories - goals.calories)
+          ? day
+          : best
+      )
+    : null;
+  const bestDayLabel = bestDay
+    ? (() => {
+        const [year, month, day] = bestDay.date.split('-').map(Number);
+        return new Date(year, month - 1, day).toLocaleDateString(undefined, { weekday: 'long' });
+      })()
+    : null;
+
   // Scale bars against the goal line unless a day blew past it.
   const peak = Math.max(goals.calories, ...days.map((day) => day.totals.calories));
   const goalLineOffset = CHART_HEIGHT * (1 - goals.calories / peak);
@@ -131,49 +149,47 @@ export default function ProgressScreen() {
           </Card>
 
           <Card>
-            <ThemedText style={styles.cardTitle}>Averages</ThemedText>
+            <ThemedText style={styles.cardTitle}>This week</ThemedText>
             <View style={styles.statRow}>
               <Stat
-                label="Daily calories"
+                label="Avg calories"
                 value={average ? average.toLocaleString() : '—'}
-                hint={`${logged.length} day${logged.length === 1 ? '' : 's'} logged`}
+                hint="per logged day"
               />
-              <Stat
-                label="On target"
-                value={`${onTarget}/${logged.length || 0}`}
-                hint="within 10% of goal"
-              />
+              <Stat label="On target" value={`${onTarget}/${logged.length || 0}`} hint="within 10%" />
+              <Stat label="Logged" value={`${logged.length}/${DAYS}`} hint="days" />
             </View>
+
+            {bestDay ? (
+              <View style={[styles.bestDay, { borderTopColor: theme.border }]}>
+                <Ionicons name="trophy-outline" size={16} color={theme.accent} />
+                <ThemedText type="small" themeColor="textSecondary" style={styles.bestDayText}>
+                  Closest to goal:{' '}
+                  <ThemedText type="smallBold" themeColor="text">
+                    {bestDayLabel}
+                  </ThemedText>{' '}
+                  at {bestDay.totals.calories.toLocaleString()} kcal
+                </ThemedText>
+              </View>
+            ) : null}
           </Card>
 
           <Card>
-            <ThemedText style={styles.cardTitle}>Average macros</ThemedText>
-            <View style={styles.statRow}>
-              <View style={styles.stat}>
-                <ThemedText style={[styles.statValue, { color: MacroColors.protein }]}>
-                  {weekMacros.protein}g
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Protein · goal {goals.protein}g
-                </ThemedText>
-              </View>
-              <View style={styles.stat}>
-                <ThemedText style={[styles.statValue, { color: MacroColors.carbs }]}>
-                  {weekMacros.carbs}g
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Carbs · goal {goals.carbs}g
-                </ThemedText>
-              </View>
-              <View style={styles.stat}>
-                <ThemedText style={[styles.statValue, { color: MacroColors.fat }]}>
-                  {weekMacros.fat}g
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Fat · goal {goals.fat}g
-                </ThemedText>
-              </View>
-            </View>
+            <ThemedText style={styles.cardTitle}>Macro balance</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Share of your average calories from each macro.
+            </ThemedText>
+            {logged.length ? (
+              <MacroDonut
+                protein={weekMacros.protein}
+                carbs={weekMacros.carbs}
+                fat={weekMacros.fat}
+              />
+            ) : (
+              <ThemedText type="small" themeColor="textSecondary">
+                Log some food this week to see your split.
+              </ThemedText>
+            )}
           </Card>
         </ScrollView>
       </SafeAreaView>
@@ -249,5 +265,15 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     lineHeight: 30,
+  },
+  bestDay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.three,
+  },
+  bestDayText: {
+    flex: 1,
   },
 });
