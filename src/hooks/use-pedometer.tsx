@@ -2,31 +2,44 @@ import { Pedometer } from 'expo-sensors';
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { useTracker } from '@/hooks/use-tracker';
 import { toDateKey } from '@/lib/nutrition';
+import { addSteps } from '@/lib/store';
 
 export type PedometerStatus = 'checking' | 'active' | 'denied' | 'unavailable';
+
+/** How often accumulated steps are flushed to the store. */
+const FLUSH_MS = 2000;
 
 /**
  * Counts steps from the phone's hardware pedometer.
  *
  * Android limitation, straight from the Expo docs: step updates are NOT
  * delivered while the app is backgrounded, and `getStepCountAsync` (historical
- * data) is iOS-only. So this can only count steps taken with FitTracker open.
- * That's why the steps card also accepts a manual figure — copy the day's total
- * from your phone's built-in health app and the estimate stays honest.
+ * data) is iOS-only. So this only counts steps taken with FitTracker open, which
+ * is why the steps card also accepts a manual figure.
+ *
+ * Raw sensor updates can fire many times a second; writing each one to the store
+ * would re-render and hit storage constantly. Deltas are accumulated in a ref
+ * and flushed on an interval instead.
  */
 export function usePedometer(): PedometerStatus {
-  const { addSteps } = useTracker();
   const [status, setStatus] = useState<PedometerStatus>('checking');
 
-  // The sensor reports a running total since subscription, not a delta, so we
-  // track the last value we saw and bank only the difference.
+  // Running total the sensor last reported, and steps not yet flushed to the store.
   const lastTotal = useRef(0);
+  const pending = useRef(0);
 
   useEffect(() => {
     let subscription: { remove: () => void } | null = null;
     let cancelled = false;
+
+    function flush() {
+      if (pending.current <= 0) return;
+      addSteps(toDateKey(new Date()), pending.current);
+      pending.current = 0;
+    }
+
+    const flushTimer = setInterval(flush, FLUSH_MS);
 
     async function subscribe() {
       const available = await Pedometer.isAvailableAsync().catch(() => false);
@@ -47,25 +60,25 @@ export function usePedometer(): PedometerStatus {
 
       lastTotal.current = 0;
       subscription = Pedometer.watchStepCount((result) => {
+        // The sensor reports a running total since subscription, not a delta.
         const delta = result.steps - lastTotal.current;
         lastTotal.current = result.steps;
-        // Always bank against today — a walk can't retroactively belong to the
-        // day the user happens to be viewing.
-        addSteps(toDateKey(new Date()), delta);
+        if (delta > 0) pending.current += delta;
       });
       setStatus('active');
     }
 
     void subscribe();
 
-    // Re-subscribing on foreground resets the sensor baseline; without this the
-    // first reading after a background stint would be counted as one huge delta.
-    const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
+    // Re-subscribing on foreground resets the sensor baseline; flush what we have
+    // before tearing down so no steps are lost across a background stint.
+    const appStateSub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
         subscription?.remove();
         subscription = null;
         void subscribe();
       } else {
+        flush();
         subscription?.remove();
         subscription = null;
       }
@@ -73,10 +86,12 @@ export function usePedometer(): PedometerStatus {
 
     return () => {
       cancelled = true;
+      flush();
+      clearInterval(flushTimer);
       subscription?.remove();
       appStateSub.remove();
     };
-  }, [addSteps]);
+  }, []);
 
   return status;
 }

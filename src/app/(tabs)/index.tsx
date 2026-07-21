@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,14 +15,35 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MacroColors, Spacing } from '@/constants/theme';
 import { usePedometer } from '@/hooks/use-pedometer';
+import {
+  addEntry,
+  removeEntry,
+  setSelectedDate,
+  setStepsFor,
+  updateEntryServings,
+  useDayEntries,
+  useDayTotals,
+  useGoals,
+  useProfile,
+  useReady,
+  useSelectedDate,
+  useSteps,
+} from '@/hooks/use-store';
 import { useTheme } from '@/hooks/use-theme';
-import { groupByMeal, useTracker } from '@/hooks/use-tracker';
 import { caloriesFromSteps } from '@/lib/activity';
-import { Entry, MEALS, MealType, formatDateLabel, shiftDateKey, toDateKey } from '@/lib/nutrition';
+import {
+  Entry,
+  MEALS,
+  MealType,
+  formatDateLabel,
+  groupByMeal,
+  shiftDateKey,
+  toDateKey,
+} from '@/lib/nutrition';
 
 function DateHeader() {
   const theme = useTheme();
-  const { selectedDate, setSelectedDate } = useTracker();
+  const selectedDate = useSelectedDate();
   const isToday = selectedDate === toDateKey(new Date());
 
   return (
@@ -64,19 +85,32 @@ function DateHeader() {
   );
 }
 
-function EntryRow({ entry, onRemove }: { entry: Entry; onRemove: () => void }) {
+function EntryRow({
+  entry,
+  onRemove,
+  onEdit,
+}: {
+  entry: Entry;
+  onRemove: () => void;
+  onEdit: () => void;
+}) {
   const theme = useTheme();
 
   return (
     <Animated.View entering={FadeIn.duration(200)} layout={Layout.springify()} style={styles.entryRow}>
-      <View style={styles.entryText}>
+      <Pressable
+        onPress={onEdit}
+        style={styles.entryText}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${entry.name}, ${entry.calories} calories`}
+        android_ripple={{ color: theme.backgroundSelected }}>
         <ThemedText type="small" numberOfLines={1}>
           {entry.name}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {entry.servings === 1 ? entry.serving : `${entry.servings} × ${entry.serving}`}
         </ThemedText>
-      </View>
+      </Pressable>
 
       <ThemedText type="smallBold">{entry.calories}</ThemedText>
 
@@ -92,16 +126,100 @@ function EntryRow({ entry, onRemove }: { entry: Entry; onRemove: () => void }) {
   );
 }
 
+/** Bottom sheet to re-scale an already-logged entry. */
+function EditEntrySheet({ entry, onClose }: { entry: Entry; onClose: () => void }) {
+  const theme = useTheme();
+  const [servings, setServings] = useState(entry.servings);
+
+  // Per-serving base recovered from the stored totals, then re-scaled.
+  const base = {
+    calories: entry.calories / entry.servings,
+    protein: entry.protein / entry.servings,
+    carbs: entry.carbs / entry.servings,
+    fat: entry.fat / entry.servings,
+  };
+  const scaled = {
+    calories: Math.round(base.calories * servings),
+    protein: Math.round(base.protein * servings),
+    carbs: Math.round(base.carbs * servings),
+    fat: Math.round(base.fat * servings),
+  };
+
+  function save() {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    updateEntryServings(entry.id, servings, scaled);
+    onClose();
+  }
+
+  return (
+    <Modal transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <ThemedView style={[styles.sheet, { borderColor: theme.border }]}>
+        <View style={[styles.grabber, { backgroundColor: theme.track }]} />
+        <ThemedText style={styles.sheetTitle}>{entry.name}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {entry.serving}
+        </ThemedText>
+
+        <View style={styles.stepper}>
+          <Pressable
+            onPress={() => {
+              void Haptics.selectionAsync();
+              setServings((s) => Math.max(0.5, s - 0.5));
+            }}
+            style={[styles.stepBtn, { borderColor: theme.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Decrease servings"
+            android_ripple={{ color: theme.backgroundSelected, borderless: true, radius: 28 }}>
+            <Ionicons name="remove" size={22} color={theme.text} />
+          </Pressable>
+          <View style={styles.stepValue}>
+            <ThemedText style={styles.servings}>{servings}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {servings === 1 ? 'serving' : 'servings'}
+            </ThemedText>
+          </View>
+          <Pressable
+            onPress={() => {
+              void Haptics.selectionAsync();
+              setServings((s) => s + 0.5);
+            }}
+            style={[styles.stepBtn, { borderColor: theme.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Increase servings"
+            android_ripple={{ color: theme.backgroundSelected, borderless: true, radius: 28 }}>
+            <Ionicons name="add" size={22} color={theme.text} />
+          </Pressable>
+        </View>
+
+        <ThemedText type="small" themeColor="textSecondary" style={styles.editSummary}>
+          {scaled.calories} kcal · P{scaled.protein} C{scaled.carbs} F{scaled.fat}
+        </ThemedText>
+
+        <Pressable
+          onPress={save}
+          style={[styles.saveButton, { backgroundColor: theme.accent }]}
+          accessibilityRole="button"
+          android_ripple={{ color: '#00000022' }}>
+          <ThemedText style={styles.saveButtonText}>Save</ThemedText>
+        </Pressable>
+      </ThemedView>
+    </Modal>
+  );
+}
+
 function MealSection({
   meal,
   label,
   entries,
   onRemove,
+  onEdit,
 }: {
   meal: MealType;
   label: string;
   entries: Entry[];
   onRemove: (entry: Entry) => void;
+  onEdit: (entry: Entry) => void;
 }) {
   const theme = useTheme();
   const calories = entries.reduce((sum, entry) => sum + entry.calories, 0);
@@ -116,7 +234,12 @@ function MealSection({
       </View>
 
       {entries.map((entry) => (
-        <EntryRow key={entry.id} entry={entry} onRemove={() => onRemove(entry)} />
+        <EntryRow
+          key={entry.id}
+          entry={entry}
+          onRemove={() => onRemove(entry)}
+          onEdit={() => onEdit(entry)}
+        />
       ))}
 
       <Pressable
@@ -153,26 +276,18 @@ function EmptyDay() {
 }
 
 export default function TodayScreen() {
-  const {
-    selectedDate,
-    entriesFor,
-    totalsFor,
-    goals,
-    ready,
-    addEntry,
-    removeEntry,
-    profile,
-    stepsFor,
-    setStepsFor,
-  } = useTracker();
+  const ready = useReady();
+  const selectedDate = useSelectedDate();
+  const entries = useDayEntries(selectedDate);
+  const totals = useDayTotals(selectedDate);
+  const goals = useGoals();
+  const profile = useProfile();
+  const steps = useSteps(selectedDate);
   const pedometerStatus = usePedometer();
   const [undo, setUndo] = useState<Entry | null>(null);
+  const [editing, setEditing] = useState<Entry | null>(null);
 
-  const entries = ready ? entriesFor(selectedDate) : [];
-  const totals = ready ? totalsFor(selectedDate) : { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const byMeal = groupByMeal(entries);
-
-  const steps = stepsFor(selectedDate);
   const burned = caloriesFromSteps(steps, profile.weightKg);
 
   /**
@@ -235,10 +350,13 @@ export default function TodayScreen() {
               label={label}
               entries={byMeal[key]}
               onRemove={handleRemove}
+              onEdit={setEditing}
             />
           ))}
         </ScrollView>
       </SafeAreaView>
+
+      {editing ? <EditEntrySheet entry={editing} onClose={() => setEditing(null)} /> : null}
 
       {undo ? (
         <Snackbar
@@ -329,5 +447,68 @@ const styles = StyleSheet.create({
   },
   emptyBody: {
     textAlign: 'center',
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: '#00000080',
+  },
+  sheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.four,
+    paddingBottom: Spacing.five,
+    gap: Spacing.two,
+  },
+  grabber: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: Spacing.three,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  stepBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepValue: {
+    alignItems: 'center',
+    minWidth: 90,
+  },
+  servings: {
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 38,
+  },
+  editSummary: {
+    textAlign: 'center',
+  },
+  saveButton: {
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.three,
+    overflow: 'hidden',
+  },
+  saveButtonText: {
+    color: '#04120A',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

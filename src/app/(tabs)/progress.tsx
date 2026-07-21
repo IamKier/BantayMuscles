@@ -1,13 +1,15 @@
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { WeightCard } from '@/components/weight-card';
 import { MacroColors, Spacing } from '@/constants/theme';
+import { useEntries, useGoals } from '@/hooks/use-store';
 import { useTheme } from '@/hooks/use-theme';
-import { useTracker } from '@/hooks/use-tracker';
-import { shiftDateKey, toDateKey } from '@/lib/nutrition';
+import { shiftDateKey, sumMacros, toDateKey } from '@/lib/nutrition';
 
 const DAYS = 7;
 const CHART_HEIGHT = 140;
@@ -30,18 +32,29 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 export default function ProgressScreen() {
   const theme = useTheme();
-  const { totalsFor, goals } = useTracker();
+  const goals = useGoals();
+  const entries = useEntries();
 
   const today = toDateKey(new Date());
-  const days = Array.from({ length: DAYS }, (_, index) => {
-    const date = shiftDateKey(today, index - (DAYS - 1));
-    const [year, month, day] = date.split('-').map(Number);
-    return {
-      date,
-      label: new Date(year, month - 1, day).toLocaleDateString(undefined, { weekday: 'narrow' }),
-      totals: totalsFor(date),
-    };
-  });
+  // Bucket the week's entries by date once, then total each day — cheaper than
+  // scanning the whole list seven times, and only recomputes when entries change.
+  const days = useMemo(() => {
+    const byDate = new Map<string, typeof entries>();
+    for (const entry of entries) {
+      const bucket = byDate.get(entry.date);
+      if (bucket) bucket.push(entry);
+      else byDate.set(entry.date, [entry]);
+    }
+    return Array.from({ length: DAYS }, (_, index) => {
+      const date = shiftDateKey(today, index - (DAYS - 1));
+      const [year, month, day] = date.split('-').map(Number);
+      return {
+        date,
+        label: new Date(year, month - 1, day).toLocaleDateString(undefined, { weekday: 'narrow' }),
+        totals: sumMacros(byDate.get(date) ?? []),
+      };
+    });
+  }, [entries, today]);
 
   const logged = days.filter((day) => day.totals.calories > 0);
   const average = logged.length
@@ -69,6 +82,8 @@ export default function ProgressScreen() {
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <ThemedText style={styles.heading}>Progress</ThemedText>
+
+          <WeightCard />
 
           <Card>
             <View style={styles.cardHeader}>

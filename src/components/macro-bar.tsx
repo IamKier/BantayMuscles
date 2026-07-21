@@ -1,4 +1,11 @@
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -14,20 +21,30 @@ type MacroBarProps = {
 
 export function MacroBar({ label, value, goal, color, unit = 'g' }: MacroBarProps) {
   const theme = useTheme();
-  const progress = goal > 0 ? Math.min(1, value / goal) : 0;
+  const target = goal > 0 ? Math.min(1, value / goal) : 0;
+  const over = goal > 0 && value > goal;
+
+  // Fill animates to match the calorie ring, so logging a food nudges every bar
+  // rather than snapping.
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(target, { duration: 500, easing: Easing.out(Easing.cubic) });
+  }, [target, progress]);
+
+  const fillStyle = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }));
 
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
         <ThemedText type="smallBold">{label}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="small" themeColor={over ? 'danger' : 'textSecondary'}>
           {Math.round(value)} / {goal}
           {unit}
         </ThemedText>
       </View>
       <View style={[styles.track, { backgroundColor: theme.track }]}>
-        <View
-          style={[styles.fill, { backgroundColor: color, width: `${progress * 100}%` }]}
+        <Animated.View
+          style={[styles.fill, fillStyle, { backgroundColor: over ? theme.danger : color }]}
         />
       </View>
     </View>

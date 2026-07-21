@@ -99,3 +99,60 @@ export async function searchOnline(query: string): Promise<OnlineSearchResult> {
 export function isOnlineFood(food: Food): boolean {
   return food.id.startsWith('off:');
 }
+
+type ProductResponse = {
+  status?: number;
+  product?: {
+    product_name?: string;
+    brands?: string | string[];
+    nutriments?: Hit['nutriments'];
+  };
+};
+
+export type BarcodeResult =
+  | { ok: true; food: Food }
+  | { ok: false; error: string };
+
+/** Looks up a single product by its barcode (EAN/UPC). */
+export async function lookupBarcode(code: string): Promise<BarcodeResult> {
+  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(
+    code
+  )}?fields=product_name,brands,nutriments`;
+
+  let payload: ProductResponse;
+  try {
+    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    if (!response.ok) return { ok: false, error: `Lookup failed (${response.status}).` };
+    payload = await response.json();
+  } catch {
+    return { ok: false, error: 'Couldn’t reach the food database. Check your connection.' };
+  }
+
+  const product = payload.product;
+  const calories = product?.nutriments?.['energy-kcal_100g'];
+  if (payload.status !== 1 || !product?.product_name || !calories) {
+    return {
+      ok: false,
+      error: 'That barcode isn’t in the database, or has no nutrition data. Try Quick add.',
+    };
+  }
+
+  const brand = brandOf(product.brands).trim();
+  const name = product.product_name.trim();
+  const label = brand && !name.toLowerCase().includes(brand.toLowerCase())
+    ? `${name} (${brand})`
+    : name;
+
+  return {
+    ok: true,
+    food: {
+      id: `off:${code}`,
+      name: label,
+      serving: '100 g',
+      calories: round(calories),
+      protein: round(product.nutriments?.proteins_100g),
+      carbs: round(product.nutriments?.carbohydrates_100g),
+      fat: round(product.nutriments?.fat_100g),
+    },
+  };
+}

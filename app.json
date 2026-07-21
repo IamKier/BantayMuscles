@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "FitTracker",
-    "slug": "FitTracker",
+    "name": "BantayMuscles",
+    "slug": "BantayMuscles",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "fittracker",
+    "scheme": "bantaymuscles",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -34,6 +34,12 @@
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BantayMuscles uses the camera to scan food barcodes."
         }
       ]
     ],

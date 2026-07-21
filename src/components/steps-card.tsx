@@ -1,7 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
@@ -99,7 +105,13 @@ export function StepsCard({ steps, weightKg, heightCm, status, onSetSteps }: Ste
 
   const burned = caloriesFromSteps(steps, weightKg);
   const km = distanceFromSteps(steps, heightCm);
-  const progress = Math.min(1, steps / DEFAULT_STEP_GOAL);
+  const target = Math.min(1, steps / DEFAULT_STEP_GOAL);
+
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(target, { duration: 500, easing: Easing.out(Easing.cubic) });
+  }, [target, progress]);
+  const fillStyle = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }));
 
   return (
     <>
@@ -151,9 +163,7 @@ export function StepsCard({ steps, weightKg, heightCm, status, onSetSteps }: Ste
           style={[styles.track, { backgroundColor: theme.track }]}
           accessibilityRole="progressbar"
           accessibilityLabel={`${steps} of ${DEFAULT_STEP_GOAL} steps`}>
-          <View
-            style={[styles.fill, { backgroundColor: theme.accent, width: `${progress * 100}%` }]}
-          />
+          <Animated.View style={[styles.fill, fillStyle, { backgroundColor: theme.accent }]} />
         </View>
 
         <StatusNote status={status} />

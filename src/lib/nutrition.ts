@@ -137,6 +137,15 @@ export function toDateKey(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+export function groupByMeal(entries: Entry[]): Record<MealType, Entry[]> {
+  return {
+    breakfast: entries.filter((entry) => entry.meal === 'breakfast'),
+    lunch: entries.filter((entry) => entry.meal === 'lunch'),
+    dinner: entries.filter((entry) => entry.meal === 'dinner'),
+    snack: entries.filter((entry) => entry.meal === 'snack'),
+  };
+}
+
 export function shiftDateKey(key: string, days: number): string {
   const [year, month, day] = key.split('-').map(Number);
   return toDateKey(new Date(year, month - 1, day + days));

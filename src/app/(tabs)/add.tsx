@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -13,13 +13,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Card } from '@/components/card';
 import { QuickAddSheet, type QuickAddValues } from '@/components/quick-add-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MacroColors, Spacing } from '@/constants/theme';
+import {
+  addEntry,
+  addSavedFood,
+  useFoods,
+  useRecentFoods,
+  useSavedFoods,
+  useSelectedDate,
+} from '@/hooks/use-store';
 import { useTheme } from '@/hooks/use-theme';
-import { useTracker } from '@/hooks/use-tracker';
 import { filterFoods } from '@/lib/foods';
 import { Food, MEALS, MealType, formatDateLabel, scaleMacros } from '@/lib/nutrition';
 import { isOnlineFood, searchOnline } from '@/lib/online-search';
@@ -69,12 +77,23 @@ function MealChips({
   );
 }
 
-function FoodRow({ food, onPress }: { food: Food; onPress: () => void }) {
+/**
+ * Memoized: without this, every keystroke in the search box re-renders all 55+
+ * rows, and that synchronous work per character makes the Android keyboard
+ * flicker. `onPress` is passed as a stable callback so the memo actually holds.
+ */
+const FoodRow = memo(function FoodRow({
+  food,
+  onPress,
+}: {
+  food: Food;
+  onPress: (food: Food) => void;
+}) {
   const theme = useTheme();
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onPress(food)}
       accessibilityRole="button"
       accessibilityLabel={`${food.name}, ${food.calories} calories per ${food.serving}`}
       style={[styles.foodRow, { borderBottomColor: theme.border }]}
@@ -96,7 +115,7 @@ function FoodRow({ food, onPress }: { food: Food; onPress: () => void }) {
       <Ionicons name="add-circle" size={22} color={theme.accent} />
     </Pressable>
   );
-}
+});
 
 /** Serving picker shown after tapping a food; confirms the exact amount before logging. */
 function ServingSheet({
@@ -197,43 +216,64 @@ function MacroPill({
 
 export default function AddScreen() {
   const theme = useTheme();
-  const { addEntry, selectedDate, foods } = useTracker();
+  const selectedDate = useSelectedDate();
+  const catalog = useFoods();
+  const savedFoods = useSavedFoods();
+  const recents = useRecentFoods();
+  // User's saved foods rank ahead of the shared catalog in search.
+  const foods = useMemo(() => [...savedFoods, ...catalog], [savedFoods, catalog]);
   const params = useLocalSearchParams<{ meal?: MealType }>();
 
   const [meal, setMeal] = useState<MealType>(params.meal ?? 'breakfast');
+  // `text` updates on every keystroke so the input stays responsive; `query` is
+  // debounced and is what actually drives the (heavier) list filter. Keeping the
+  // two apart stops the per-character list re-render that flickers the keyboard.
+  const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Food | null>(null);
   const [quickAdd, setQuickAdd] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [online, setOnline] = useState<Food[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const handle = setTimeout(() => setQuery(text.trim()), 180);
+    return () => clearTimeout(handle);
+  }, [text]);
+
   const local = useMemo(() => filterFoods(foods, query), [foods, query]);
   const results = useMemo(() => [...local, ...online], [local, online]);
 
-  async function runOnlineSearch() {
-    if (searching) return;
-    setSearching(true);
-    setSearchError(null);
+  const runOnlineSearch = useCallback(
+    async (term: string) => {
+      const q = term.trim();
+      if (q.length < 2 || searching) return;
+      setSearching(true);
+      setSearchError(null);
 
-    const result = await searchOnline(query);
-    setSearching(false);
+      const result = await searchOnline(q);
+      setSearching(false);
 
-    if (!result.ok) {
-      setSearchError(result.error);
-      return;
-    }
-    // Drop anything already in the local catalog so the list doesn't repeat itself.
-    const known = new Set(local.map((food) => food.name.toLowerCase()));
-    setOnline(result.foods.filter((food) => !known.has(food.name.toLowerCase())));
-  }
+      if (!result.ok) {
+        setSearchError(result.error);
+        return;
+      }
+      // Drop anything already in the local catalog so the list doesn't repeat itself.
+      const known = new Set(filterFoods(foods, q).map((food) => food.name.toLowerCase()));
+      setOnline(result.foods.filter((food) => !known.has(food.name.toLowerCase())));
+    },
+    [foods, searching]
+  );
 
   function updateQuery(value: string) {
-    setQuery(value);
+    setText(value);
     // Online results belong to the previous query — drop them.
-    setOnline([]);
+    setOnline((current) => (current.length ? [] : current));
     setSearchError(null);
   }
+
+  const handlePick = useCallback((food: Food) => setPicked(food), []);
 
   function handleQuickAdd(values: QuickAddValues) {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -248,8 +288,26 @@ export default function AddScreen() {
       carbs: values.carbs,
       fat: values.fat,
     });
+    // Keep a named custom food so it can be searched and re-logged later.
+    if (values.name !== 'Quick add') {
+      addSavedFood({
+        id: `custom:${values.name.toLowerCase()}`,
+        name: values.name,
+        serving: 'custom entry',
+        calories: values.calories,
+        protein: values.protein,
+        carbs: values.carbs,
+        fat: values.fat,
+      });
+    }
     setQuickAdd(false);
     router.navigate('/');
+  }
+
+  function handleScanned(food: Food) {
+    setScanning(false);
+    // Drop straight into the serving picker so the amount can be confirmed.
+    setPicked(food);
   }
 
   function handleConfirm(servings: number) {
@@ -279,15 +337,28 @@ export default function AddScreen() {
             </ThemedText>
           </View>
 
-          <Pressable
-            onPress={() => setQuickAdd(true)}
-            style={[styles.quickAddButton, { borderColor: theme.accent }]}
-            android_ripple={{ color: theme.backgroundSelected }}>
-            <Ionicons name="create-outline" size={16} color={theme.accent} />
-            <ThemedText type="smallBold" style={{ color: theme.accent }}>
-              Quick add
-            </ThemedText>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => setScanning(true)}
+              style={[styles.iconButton, { borderColor: theme.accent }]}
+              accessibilityRole="button"
+              accessibilityLabel="Scan barcode"
+              android_ripple={{ color: theme.backgroundSelected, borderless: true, radius: 22 }}>
+              <Ionicons name="barcode-outline" size={20} color={theme.accent} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => setQuickAdd(true)}
+              style={[styles.quickAddButton, { borderColor: theme.accent }]}
+              accessibilityRole="button"
+              accessibilityLabel="Quick add by numbers"
+              android_ripple={{ color: theme.backgroundSelected }}>
+              <Ionicons name="create-outline" size={16} color={theme.accent} />
+              <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                Quick add
+              </ThemedText>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.headerBody}>
@@ -298,15 +369,15 @@ export default function AddScreen() {
             ]}>
             <Ionicons name="search" size={18} color={theme.textSecondary} />
             <TextInput
-              value={query}
+              value={text}
               onChangeText={updateQuery}
               placeholder="Search foods"
               placeholderTextColor={theme.textSecondary}
               style={[styles.searchInput, { color: theme.text }]}
               returnKeyType="search"
-              onSubmitEditing={runOnlineSearch}
+              onSubmitEditing={() => runOnlineSearch(text)}
             />
-            {query.length > 0 && (
+            {text.length > 0 && (
               <Pressable onPress={() => updateQuery('')} hitSlop={10}>
                 <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
               </Pressable>
@@ -321,9 +392,33 @@ export default function AddScreen() {
           keyExtractor={(food) => food.id}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => <FoodRow food={item} onPress={() => setPicked(item)} />}
+          renderItem={({ item }) => <FoodRow food={item} onPress={handlePick} />}
+          ListHeaderComponent={
+            text.trim().length === 0 && recents.length > 0 ? (
+              <View style={styles.recents}>
+                <ThemedText type="smallBold" themeColor="textSecondary" style={styles.recentsLabel}>
+                  Recent
+                </ThemedText>
+                {recents.map((r) => {
+                  const food: Food = {
+                    id: `recent:${r.name}|${r.serving}`,
+                    name: r.name,
+                    serving: r.serving,
+                    calories: r.calories,
+                    protein: r.protein,
+                    carbs: r.carbs,
+                    fat: r.fat,
+                  };
+                  return <FoodRow key={food.id} food={food} onPress={handlePick} />;
+                })}
+                <ThemedText type="smallBold" themeColor="textSecondary" style={styles.recentsLabel}>
+                  All foods
+                </ThemedText>
+              </View>
+            ) : null
+          }
           ListFooterComponent={
-            query.trim().length >= 2 ? (
+            query.length >= 2 ? (
               <View style={styles.footer}>
                 {searchError ? (
                   <ThemedText type="small" themeColor="danger" style={styles.footerText}>
@@ -333,7 +428,7 @@ export default function AddScreen() {
 
                 {online.length === 0 && !searchError ? (
                   <Pressable
-                    onPress={runOnlineSearch}
+                    onPress={() => runOnlineSearch(query)}
                     disabled={searching}
                     style={[styles.footerButton, { borderColor: theme.border }]}
                     android_ripple={{ color: theme.backgroundSelected }}>
@@ -389,6 +484,10 @@ export default function AddScreen() {
       {quickAdd && (
         <QuickAddSheet onClose={() => setQuickAdd(false)} onConfirm={handleQuickAdd} />
       )}
+
+      {scanning && (
+        <BarcodeScanner onClose={() => setScanning(false)} onFound={handleScanned} />
+      )}
     </ThemedView>
   );
 }
@@ -411,6 +510,20 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   quickAddButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -420,6 +533,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     overflow: 'hidden',
+  },
+  recents: {
+    gap: Spacing.one,
+  },
+  recentsLabel: {
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingTop: Spacing.two,
   },
   heading: {
     fontSize: 26,

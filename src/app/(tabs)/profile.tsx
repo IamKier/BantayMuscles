@@ -3,13 +3,14 @@ import * as Haptics from 'expo-haptics';
 import { ScrollView, StyleSheet, TextInput, View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackupCard } from '@/components/backup-card';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MacroColors, Spacing } from '@/constants/theme';
+import { updateProfile, useGoals, useProfile } from '@/hooks/use-store';
 import { useTheme } from '@/hooks/use-theme';
 import { THEME_OPTIONS, useThemePreference } from '@/hooks/use-theme-preference';
-import { useTracker } from '@/hooks/use-tracker';
 import { ACTIVITY_LEVELS, GOALS, Sex, bmr, tdee } from '@/lib/nutrition';
 
 function NumberField({
@@ -129,7 +130,8 @@ function AppearancePicker() {
 
 export default function ProfileScreen() {
   const theme = useTheme();
-  const { profile, updateProfile, goals } = useTracker();
+  const profile = useProfile();
+  const goals = useGoals();
 
   return (
     <ThemedView style={styles.screen}>
@@ -249,12 +251,7 @@ export default function ProfileScreen() {
             <AppearancePicker />
           </Card>
 
-          <Card>
-            <ThemedText style={styles.cardTitle}>Data</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Your diary is stored on this device. Nothing is uploaded and no account is needed.
-            </ThemedText>
-          </Card>
+          <BackupCard />
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
