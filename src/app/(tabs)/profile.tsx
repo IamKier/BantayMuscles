@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackupCard } from '@/components/backup-card';
 import { Card } from '@/components/card';
+import { CustomTargetCard } from '@/components/custom-target-card';
 import { TdeeCard } from '@/components/tdee-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -244,6 +245,8 @@ export default function ProfileScreen() {
               />
             ))}
           </Card>
+
+          <CustomTargetCard />
 
           <Card>
             <ThemedText style={styles.cardTitle}>Appearance</ThemedText>
