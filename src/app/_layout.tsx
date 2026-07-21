@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/error-boundary';
+import { LoadingScreen } from '@/components/loading-screen';
 import { Onboarding } from '@/components/onboarding';
 import { useOnboarded, useReady } from '@/hooks/use-store';
 import { ThemePreferenceProvider, useThemePreference } from '@/hooks/use-theme-preference';
@@ -48,8 +49,8 @@ function AppContent() {
   const ready = useReady();
   const onboarded = useOnboarded();
 
-  // Keep the tree stable during hydration; the splash covers this frame.
-  if (!ready) return null;
+  // Show the BM loading screen until persisted state is read.
+  if (!ready) return <LoadingScreen />;
   if (!onboarded) return <Onboarding />;
 
   return (
