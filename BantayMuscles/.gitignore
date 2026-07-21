@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Built APKs / app bundles for distribution — artifacts, not source.
+/dist/
+
 # Local secrets — real Supabase values live here (see remote_config.example.dart)
 /lib/remote_config.dart
 
