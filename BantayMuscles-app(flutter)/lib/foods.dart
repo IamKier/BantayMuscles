@@ -1,0 +1,67 @@
+import 'models/nutrition.dart';
+
+/// Offline starter food list (per stated serving), including Filipino staples.
+/// Same data as the Expo app's foods.ts.
+const List<Food> kFoods = [
+  Food(id: 'rice-white', name: 'White rice, cooked', serving: '1 cup (158g)', calories: 205, protein: 4, carbs: 45, fat: 0),
+  Food(id: 'rice-brown', name: 'Brown rice, cooked', serving: '1 cup (195g)', calories: 218, protein: 5, carbs: 46, fat: 2),
+  Food(id: 'oats', name: 'Oatmeal, cooked', serving: '1 cup (234g)', calories: 154, protein: 6, carbs: 27, fat: 3),
+  Food(id: 'bread-white', name: 'White bread', serving: '1 slice (28g)', calories: 75, protein: 3, carbs: 14, fat: 1),
+  Food(id: 'bread-wheat', name: 'Whole wheat bread', serving: '1 slice (32g)', calories: 82, protein: 4, carbs: 14, fat: 1),
+  Food(id: 'pandesal', name: 'Pandesal', serving: '1 piece (33g)', calories: 98, protein: 3, carbs: 18, fat: 2),
+  Food(id: 'pasta', name: 'Pasta, cooked', serving: '1 cup (140g)', calories: 220, protein: 8, carbs: 43, fat: 1),
+  Food(id: 'potato', name: 'Potato, baked', serving: '1 medium (173g)', calories: 161, protein: 4, carbs: 37, fat: 0),
+  Food(id: 'sweet-potato', name: 'Sweet potato (kamote)', serving: '1 medium (130g)', calories: 112, protein: 2, carbs: 26, fat: 0),
+  Food(id: 'chicken-breast', name: 'Chicken breast, grilled', serving: '100g', calories: 165, protein: 31, carbs: 0, fat: 4),
+  Food(id: 'chicken-thigh', name: 'Chicken thigh, roasted', serving: '100g', calories: 209, protein: 26, carbs: 0, fat: 11),
+  Food(id: 'pork-belly', name: 'Pork belly (liempo), grilled', serving: '100g', calories: 366, protein: 20, carbs: 0, fat: 31),
+  Food(id: 'pork-chop', name: 'Pork chop, lean', serving: '100g', calories: 231, protein: 26, carbs: 0, fat: 14),
+  Food(id: 'beef-ground', name: 'Ground beef, 85% lean', serving: '100g', calories: 250, protein: 26, carbs: 0, fat: 15),
+  Food(id: 'beef-sirloin', name: 'Beef sirloin, grilled', serving: '100g', calories: 206, protein: 30, carbs: 0, fat: 9),
+  Food(id: 'bangus', name: 'Bangus (milkfish), grilled', serving: '100g', calories: 162, protein: 21, carbs: 0, fat: 8),
+  Food(id: 'tilapia', name: 'Tilapia, grilled', serving: '100g', calories: 128, protein: 26, carbs: 0, fat: 3),
+  Food(id: 'salmon', name: 'Salmon, baked', serving: '100g', calories: 208, protein: 20, carbs: 0, fat: 13),
+  Food(id: 'tuna-can', name: 'Tuna, canned in water', serving: '1 can (142g)', calories: 128, protein: 29, carbs: 0, fat: 1),
+  Food(id: 'shrimp', name: 'Shrimp, cooked', serving: '100g', calories: 99, protein: 24, carbs: 0, fat: 0),
+  Food(id: 'egg', name: 'Egg, large', serving: '1 egg (50g)', calories: 72, protein: 6, carbs: 0, fat: 5),
+  Food(id: 'tofu', name: 'Tofu, firm', serving: '100g', calories: 144, protein: 17, carbs: 3, fat: 9),
+  Food(id: 'tocino', name: 'Tocino', serving: '100g', calories: 265, protein: 15, carbs: 18, fat: 14),
+  Food(id: 'longganisa', name: 'Longganisa', serving: '2 pieces (80g)', calories: 260, protein: 13, carbs: 6, fat: 20),
+  Food(id: 'adobo-chicken', name: 'Chicken adobo', serving: '1 cup (240g)', calories: 372, protein: 30, carbs: 8, fat: 24),
+  Food(id: 'sinigang-pork', name: 'Pork sinigang', serving: '1 bowl (350g)', calories: 290, protein: 22, carbs: 12, fat: 18),
+  Food(id: 'tinola', name: 'Chicken tinola', serving: '1 bowl (350g)', calories: 215, protein: 24, carbs: 9, fat: 9),
+  Food(id: 'sisig', name: 'Pork sisig', serving: '1 serving (150g)', calories: 410, protein: 22, carbs: 5, fat: 34),
+  Food(id: 'lumpia', name: 'Lumpiang shanghai', serving: '3 pieces (75g)', calories: 220, protein: 8, carbs: 16, fat: 14),
+  Food(id: 'pancit', name: 'Pancit canton', serving: '1 cup (220g)', calories: 320, protein: 12, carbs: 45, fat: 10),
+  Food(id: 'broccoli', name: 'Broccoli, steamed', serving: '1 cup (156g)', calories: 55, protein: 4, carbs: 11, fat: 1),
+  Food(id: 'spinach', name: 'Spinach, raw', serving: '1 cup (30g)', calories: 7, protein: 1, carbs: 1, fat: 0),
+  Food(id: 'mixed-veg', name: 'Mixed vegetables, cooked', serving: '1 cup (160g)', calories: 118, protein: 5, carbs: 24, fat: 1),
+  Food(id: 'banana', name: 'Banana', serving: '1 medium (118g)', calories: 105, protein: 1, carbs: 27, fat: 0),
+  Food(id: 'apple', name: 'Apple', serving: '1 medium (182g)', calories: 95, protein: 0, carbs: 25, fat: 0),
+  Food(id: 'mango', name: 'Mango', serving: '1 medium (200g)', calories: 135, protein: 2, carbs: 35, fat: 1),
+  Food(id: 'avocado', name: 'Avocado', serving: '1/2 fruit (100g)', calories: 160, protein: 2, carbs: 9, fat: 15),
+  Food(id: 'milk', name: 'Milk, whole', serving: '1 cup (244g)', calories: 149, protein: 8, carbs: 12, fat: 8),
+  Food(id: 'milk-skim', name: 'Milk, skim', serving: '1 cup (245g)', calories: 83, protein: 8, carbs: 12, fat: 0),
+  Food(id: 'yogurt-greek', name: 'Greek yogurt, plain', serving: '170g cup', calories: 100, protein: 17, carbs: 6, fat: 1),
+  Food(id: 'cheese-cheddar', name: 'Cheddar cheese', serving: '1 slice (28g)', calories: 113, protein: 7, carbs: 0, fat: 9),
+  Food(id: 'coffee-black', name: 'Coffee, black', serving: '1 cup (240ml)', calories: 2, protein: 0, carbs: 0, fat: 0),
+  Food(id: 'coffee-latte', name: 'Café latte', serving: '1 grande (473ml)', calories: 190, protein: 13, carbs: 19, fat: 7),
+  Food(id: 'soda', name: 'Soft drink, regular', serving: '1 can (330ml)', calories: 139, protein: 0, carbs: 35, fat: 0),
+  Food(id: 'beer', name: 'Beer', serving: '1 bottle (330ml)', calories: 142, protein: 1, carbs: 11, fat: 0),
+  Food(id: 'whey', name: 'Whey protein shake', serving: '1 scoop (30g)', calories: 120, protein: 24, carbs: 3, fat: 1),
+  Food(id: 'peanut-butter', name: 'Peanut butter', serving: '2 tbsp (32g)', calories: 188, protein: 8, carbs: 6, fat: 16),
+  Food(id: 'almonds', name: 'Almonds', serving: '28g (23 nuts)', calories: 164, protein: 6, carbs: 6, fat: 14),
+  Food(id: 'chips', name: 'Potato chips', serving: '28g bag', calories: 152, protein: 2, carbs: 15, fat: 10),
+  Food(id: 'chocolate', name: 'Milk chocolate bar', serving: '1 bar (45g)', calories: 235, protein: 3, carbs: 26, fat: 13),
+  Food(id: 'ice-cream', name: 'Ice cream, vanilla', serving: '1/2 cup (66g)', calories: 137, protein: 2, carbs: 16, fat: 7),
+  Food(id: 'burger', name: 'Cheeseburger, fast food', serving: '1 burger (120g)', calories: 303, protein: 15, carbs: 33, fat: 13),
+  Food(id: 'fries', name: 'French fries', serving: 'medium (117g)', calories: 365, protein: 4, carbs: 48, fat: 17),
+  Food(id: 'pizza', name: 'Pizza, cheese', serving: '1 slice (107g)', calories: 285, protein: 12, carbs: 36, fat: 10),
+  Food(id: 'fried-chicken', name: 'Fried chicken, 1 piece', serving: '1 piece (140g)', calories: 380, protein: 28, carbs: 12, fat: 24),
+];
+
+List<Food> searchFoods(String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return kFoods;
+  return kFoods.where((f) => f.name.toLowerCase().contains(q)).toList();
+}

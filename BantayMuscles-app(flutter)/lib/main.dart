@@ -1,26 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import 'models/nutrition.dart';
+import 'screens/add_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/progress_screen.dart';
+import 'screens/today_screen.dart';
+import 'store.dart';
 import 'theme.dart';
 
-void main() => runApp(const BantayMusclesApp());
+void main() {
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AppStore()..hydrate(),
+      child: const BantayMusclesApp(),
+    ),
+  );
+}
 
 class BantayMusclesApp extends StatelessWidget {
   const BantayMusclesApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final store = context.watch<AppStore>();
     return MaterialApp(
       title: 'BantayMuscles',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
-      home: const HomeShell(),
+      themeMode: store.themeMode,
+      home: store.ready ? const HomeShell() : const _LoadingScreen(),
     );
   }
 }
 
-/// Bottom-tab shell with a floating "island" nav bar, mirroring the Expo app.
+class _LoadingScreen extends StatelessWidget {
+  const _LoadingScreen();
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE4E2DD),
+      body: Center(
+        child: Text('BM',
+            style: TextStyle(fontSize: 72, fontWeight: FontWeight.w900, color: Colors.blue.shade800)),
+      ),
+    );
+  }
+}
+
+/// Bottom-tab shell with a floating "island" nav bar.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -30,6 +59,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
+  MealType _addMeal = MealType.breakfast;
 
   static const _tabs = [
     _TabDef('Today', Icons.today_outlined, Icons.today),
@@ -38,18 +68,23 @@ class _HomeShellState extends State<HomeShell> {
     _TabDef('Profile', Icons.person_outline, Icons.person),
   ];
 
-  final _pages = const [
-    _Placeholder('Today'),
-    _Placeholder('Add food'),
-    _Placeholder('Progress'),
-    _Placeholder('Profile'),
-  ];
+  void _openAdd(MealType meal) => setState(() {
+        _addMeal = meal;
+        _index = 1;
+      });
 
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      TodayScreen(onAddFood: _openAdd),
+      AddScreen(initialMeal: _addMeal, onAdded: () => setState(() => _index = 0)),
+      const ProgressScreen(),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       extendBody: true,
-      body: _pages[_index],
+      body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: _IslandNav(
         tabs: _tabs,
         index: _index,
@@ -86,11 +121,7 @@ class _IslandNav extends StatelessWidget {
           borderRadius: BorderRadius.circular(36),
           border: Border.all(color: colors.border),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.14),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.14), blurRadius: 14, offset: const Offset(0, 6)),
           ],
         ),
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -136,44 +167,11 @@ class _NavItem extends StatelessWidget {
               child: Icon(selected ? def.activeIcon : def.icon, size: 22, color: fg),
             ),
             const SizedBox(height: 2),
-            Text(
-              def.label,
-              style: TextStyle(
-                fontSize: 11,
-                height: 1.2,
-                color: fg,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
+            Text(def.label,
+                style: TextStyle(fontSize: 11, height: 1.2, color: fg, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
           ],
         ),
       ),
     );
   }
-}
-
-class _Placeholder extends StatelessWidget {
-  final String title;
-  const _Placeholder(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeAreaWidget(
-      child: Center(
-        child: Text(
-          '$title\n(coming soon)',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: context.colors.text),
-        ),
-      ),
-    );
-  }
-}
-
-/// Small alias so screens don't repeat SafeArea boilerplate.
-class SafeAreaWidget extends StatelessWidget {
-  final Widget child;
-  const SafeAreaWidget({super.key, required this.child});
-  @override
-  Widget build(BuildContext context) => SafeArea(bottom: false, child: child);
 }
