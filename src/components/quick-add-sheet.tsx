@@ -22,6 +22,8 @@ export type QuickAddValues = Macros & { name: string };
 type QuickAddSheetProps = {
   onClose: () => void;
   onConfirm: (values: QuickAddValues) => void;
+  /** Pre-fills the fields, e.g. from a scanned nutrition label. */
+  initial?: Partial<QuickAddValues>;
 };
 
 /** Parses a typed number, treating blank/garbage as 0 rather than NaN. */
@@ -71,14 +73,16 @@ function NumberInput({
  * Logs a food that isn't in the catalog by typing the numbers straight in.
  * Only calories are required — macros default to 0 so a rough entry stays quick.
  */
-export function QuickAddSheet({ onClose, onConfirm }: QuickAddSheetProps) {
+const numOrEmpty = (value: number | undefined) => (value != null ? String(value) : '');
+
+export function QuickAddSheet({ onClose, onConfirm, initial }: QuickAddSheetProps) {
   const theme = useTheme();
 
-  const [name, setName] = useState('');
-  const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [fat, setFat] = useState('');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [calories, setCalories] = useState(numOrEmpty(initial?.calories));
+  const [protein, setProtein] = useState(numOrEmpty(initial?.protein));
+  const [carbs, setCarbs] = useState(numOrEmpty(initial?.carbs));
+  const [fat, setFat] = useState(numOrEmpty(initial?.fat));
   const [error, setError] = useState<string | null>(null);
 
   function confirm() {

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Card } from '@/components/card';
+import { LabelScanner } from '@/components/label-scanner';
 import { QuickAddSheet, type QuickAddValues } from '@/components/quick-add-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -282,7 +283,9 @@ export default function AddScreen() {
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Food | null>(null);
   const [quickAdd, setQuickAdd] = useState(false);
+  const [quickAddInitial, setQuickAddInitial] = useState<Partial<QuickAddValues> | undefined>();
   const [scanning, setScanning] = useState(false);
+  const [labelScanning, setLabelScanning] = useState(false);
   const [online, setOnline] = useState<Food[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -355,6 +358,18 @@ export default function AddScreen() {
     setPicked(food);
   }
 
+  function handleLabelRead(values: { calories?: number; protein?: number; carbs?: number; fat?: number }) {
+    setLabelScanning(false);
+    // Pre-fill Quick add with whatever OCR found; the user reviews before saving.
+    setQuickAddInitial({ name: 'Scanned label', ...values });
+    setQuickAdd(true);
+  }
+
+  function closeQuickAdd() {
+    setQuickAdd(false);
+    setQuickAddInitial(undefined);
+  }
+
   function handleConfirm(servings: number) {
     if (!picked) return;
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -384,6 +399,15 @@ export default function AddScreen() {
 
           <View style={styles.headerActions}>
             <Pressable
+              onPress={() => setLabelScanning(true)}
+              style={[styles.iconButton, { borderColor: theme.accent }]}
+              accessibilityRole="button"
+              accessibilityLabel="Scan nutrition label"
+              android_ripple={{ color: theme.backgroundSelected, borderless: true, radius: 22 }}>
+              <Ionicons name="reader-outline" size={20} color={theme.accent} />
+            </Pressable>
+
+            <Pressable
               onPress={() => setScanning(true)}
               style={[styles.iconButton, { borderColor: theme.accent }]}
               accessibilityRole="button"
@@ -394,14 +418,11 @@ export default function AddScreen() {
 
             <Pressable
               onPress={() => setQuickAdd(true)}
-              style={[styles.quickAddButton, { borderColor: theme.accent }]}
+              style={[styles.iconButton, { borderColor: theme.accent }]}
               accessibilityRole="button"
               accessibilityLabel="Quick add by numbers"
-              android_ripple={{ color: theme.backgroundSelected }}>
-              <Ionicons name="create-outline" size={16} color={theme.accent} />
-              <ThemedText type="smallBold" style={{ color: theme.accent }}>
-                Quick add
-              </ThemedText>
+              android_ripple={{ color: theme.backgroundSelected, borderless: true, radius: 22 }}>
+              <Ionicons name="create-outline" size={20} color={theme.accent} />
             </Pressable>
           </View>
         </View>
@@ -506,11 +527,19 @@ export default function AddScreen() {
       )}
 
       {quickAdd && (
-        <QuickAddSheet onClose={() => setQuickAdd(false)} onConfirm={handleQuickAdd} />
+        <QuickAddSheet
+          onClose={closeQuickAdd}
+          onConfirm={handleQuickAdd}
+          initial={quickAddInitial}
+        />
       )}
 
       {scanning && (
         <BarcodeScanner onClose={() => setScanning(false)} onFound={handleScanned} />
+      )}
+
+      {labelScanning && (
+        <LabelScanner onClose={() => setLabelScanning(false)} onRead={handleLabelRead} />
       )}
     </ThemedView>
   );
