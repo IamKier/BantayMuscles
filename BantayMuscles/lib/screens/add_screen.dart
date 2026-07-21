@@ -104,6 +104,31 @@ class _AddScreenState extends State<AddScreen> {
     _pick(food);
   }
 
+  /// Log a food by typing the numbers in — no catalog entry needed.
+  Future<void> _quickAdd() async {
+    final values = await showModalBottomSheet<_QuickAddValues>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _QuickAddSheet(),
+    );
+    if (values == null || !mounted) return;
+    final store = context.read<AppStore>();
+    store.addEntry(Entry(
+      id: createId(),
+      date: store.selectedDate,
+      meal: _meal,
+      name: values.name.isEmpty ? 'Quick add' : values.name,
+      serving: '1 serving',
+      servings: 1,
+      calories: values.calories,
+      protein: values.protein,
+      carbs: values.carbs,
+      fat: values.fat,
+    ));
+    widget.onAdded();
+  }
+
   void _pick(Food food) async {
     final servings = await showModalBottomSheet<double>(
       context: context,
@@ -257,6 +282,43 @@ class _AddScreenState extends State<AddScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
               children: [
+                // Quick add — type a food's numbers in manually.
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: Material(
+                    color: colors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      onTap: _quickAdd,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: colors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_note, color: colors.accent),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Quick add',
+                                      style: TextStyle(fontWeight: FontWeight.w700)),
+                                  Text('Enter a food manually',
+                                      style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right, color: colors.textSecondary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 _AiSection(
                   loading: _aiLoading,
                   error: _aiError,
@@ -605,5 +667,201 @@ class _Pill extends StatelessWidget {
       Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: color)),
       Text(label, style: TextStyle(fontSize: 13, color: context.colors.textSecondary)),
     ]);
+  }
+}
+
+/// What the Quick Add sheet returns: a name plus typed-in macros.
+class _QuickAddValues {
+  final String name;
+  final int calories;
+  final int protein;
+  final int carbs;
+  final int fat;
+  const _QuickAddValues({
+    required this.name,
+    required this.calories,
+    required this.protein,
+    required this.carbs,
+    required this.fat,
+  });
+}
+
+/// Logs a food that isn't in the catalog by typing the numbers straight in.
+/// Only calories are required — macros default to 0 so a rough entry stays quick.
+class _QuickAddSheet extends StatefulWidget {
+  const _QuickAddSheet();
+
+  @override
+  State<_QuickAddSheet> createState() => _QuickAddSheetState();
+}
+
+class _QuickAddSheetState extends State<_QuickAddSheet> {
+  final _name = TextEditingController();
+  final _calories = TextEditingController();
+  final _protein = TextEditingController();
+  final _carbs = TextEditingController();
+  final _fat = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _calories.dispose();
+    _protein.dispose();
+    _carbs.dispose();
+    _fat.dispose();
+    super.dispose();
+  }
+
+  /// Parses a typed number, treating blank/garbage as 0 rather than NaN.
+  int _toNumber(String text) {
+    final cleaned = text.replaceAll(RegExp(r'[^0-9.]'), '');
+    final parsed = double.tryParse(cleaned);
+    return parsed == null || !parsed.isFinite ? 0 : parsed.round();
+  }
+
+  void _confirm() {
+    final kcal = _toNumber(_calories.text);
+    if (kcal <= 0) {
+      setState(() => _error = 'Enter how many calories this was.');
+      return;
+    }
+    Navigator.of(context).pop(_QuickAddValues(
+      name: _name.text.trim(),
+      calories: kcal,
+      protein: _toNumber(_protein.text),
+      carbs: _toNumber(_carbs.text),
+      fat: _toNumber(_fat.text),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border.all(color: colors.border),
+      ),
+      padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: colors.track, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Quick add', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text('Type the numbers off a label or receipt. Only calories are required.',
+                style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+            const SizedBox(height: 16),
+            Text('Name (optional)', style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _name,
+              textInputAction: TextInputAction.next,
+              decoration: _fieldDecoration(colors, hint: 'e.g. Lunch at the canteen'),
+            ),
+            const SizedBox(height: 16),
+            _NumberField(
+              controller: _calories,
+              label: 'Calories (kcal)',
+              color: colors.accent,
+              autofocus: true,
+              onChanged: () {
+                if (_error != null) setState(() => _error = null);
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: _NumberField(controller: _protein, label: 'Protein (g)', color: MacroColors.protein)),
+              const SizedBox(width: 8),
+              Expanded(child: _NumberField(controller: _carbs, label: 'Carbs (g)', color: MacroColors.carbs)),
+              const SizedBox(width: 8),
+              Expanded(child: _NumberField(controller: _fat, label: 'Fat (g)', color: MacroColors.fat)),
+            ]),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Row(children: [
+                Icon(Icons.error_outline, size: 16, color: colors.danger),
+                const SizedBox(width: 6),
+                Text(_error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+              ]),
+            ],
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: _confirm,
+                child: const Text('Add to diary',
+                    style: TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+InputDecoration _fieldDecoration(AppColors colors, {String? hint}) => InputDecoration(
+      hintText: hint,
+      isDense: true,
+      filled: true,
+      fillColor: colors.background,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colors.border),
+      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    );
+
+/// A labelled numeric field for Quick Add.
+class _NumberField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final Color color;
+  final bool autofocus;
+  final VoidCallback? onChanged;
+  const _NumberField({
+    required this.controller,
+    required this.label,
+    required this.color,
+    this.autofocus = false,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 13, color: color)),
+        const SizedBox(height: 4),
+        TextField(
+          controller: controller,
+          autofocus: autofocus,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onChanged: (_) => onChanged?.call(),
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          decoration: _fieldDecoration(colors, hint: '0'),
+        ),
+      ],
+    );
   }
 }
