@@ -8,11 +8,16 @@
     "scheme": "bantaymuscles",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/bm-icon.png"
+      "icon": "./assets/images/bm-icon.png",
+      "bundleIdentifier": "com.bantaymuscles.app"
     },
     "android": {
+      "package": "com.bantaymuscles.app",
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E4E2DD",
