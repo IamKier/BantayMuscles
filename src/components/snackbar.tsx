@@ -8,8 +8,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-/** Height of the custom tab bar above the safe-area inset. */
-const TAB_BAR_HEIGHT = 64;
+/** Height of the floating island tab bar above the safe-area inset. */
+const TAB_BAR_HEIGHT = 80;
 
 type SnackbarProps = {
   message: string;

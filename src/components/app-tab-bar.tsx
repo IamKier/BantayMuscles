@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,9 +31,13 @@ const TABS: Record<string, TabMeta> = {
 };
 
 /**
- * Material-3 style bar: a filled pill slides behind the active icon, icons swap
- * to their filled variant, and the whole bar respects the gesture-nav inset
- * instead of assuming a fixed height.
+ * Floating "island" tab bar: a rounded, shadowed pill inset from the screen
+ * edges. The outer container matches the screen background so the side gaps read
+ * as the island floating over it. It still occupies layout height (rather than
+ * overlapping content), so nothing is hidden behind it.
+ *
+ * A filled pill slides behind the active icon, and icons swap to their filled
+ * variant when selected.
  */
 export function AppTabBar({ state, navigation }: TabBarProps) {
   const theme = useTheme();
@@ -42,96 +46,118 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
   return (
     <View
       style={[
-        styles.bar,
+        styles.outer,
         {
-          backgroundColor: theme.backgroundElement,
-          borderTopColor: theme.border,
-          // Sit above the gesture bar rather than under it.
-          paddingBottom: Math.max(insets.bottom, Spacing.two),
+          backgroundColor: theme.background,
+          paddingBottom: Math.max(insets.bottom, Spacing.three),
         },
       ]}>
-      {state.routes.map((route, index) => {
-        const meta = TABS[route.name];
-        if (!meta) return null;
+      <View
+        style={[
+          styles.island,
+          {
+            backgroundColor: theme.backgroundElement,
+            borderColor: theme.border,
+            shadowColor: '#000',
+          },
+        ]}>
+        {state.routes.map((route, index) => {
+          const meta = TABS[route.name];
+          if (!meta) return null;
 
-        const focused = state.index === index;
+          const focused = state.index === index;
 
-        function onPress() {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
+          function onPress() {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
 
-          if (focused || event.defaultPrevented) return;
-          void Haptics.selectionAsync();
-          navigation.navigate(route.name);
-        }
+            if (focused || event.defaultPrevented) return;
+            void Haptics.selectionAsync();
+            navigation.navigate(route.name);
+          }
 
-        return (
-          <Pressable
-            key={route.key}
-            onPress={onPress}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: focused }}
-            accessibilityLabel={meta.label}
-            style={styles.tab}
-            android_ripple={{ color: theme.backgroundSelected, borderless: true, radius: 40 }}>
-            <View style={styles.pillSlot}>
-              {focused && (
-                <Animated.View
-                  entering={FadeIn.duration(160)}
-                  style={[styles.pill, { backgroundColor: theme.accentMuted }]}
+          return (
+            <Pressable
+              key={route.key}
+              onPress={onPress}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: focused }}
+              accessibilityLabel={meta.label}
+              style={styles.tab}
+              android_ripple={{ color: theme.backgroundSelected, borderless: true, radius: 36 }}>
+              <View style={styles.pillSlot}>
+                {focused && (
+                  <Animated.View
+                    entering={FadeIn.duration(160)}
+                    style={[styles.pill, { backgroundColor: theme.accentMuted }]}
+                  />
+                )}
+                <Ionicons
+                  name={focused ? meta.activeIcon : meta.icon}
+                  size={22}
+                  color={focused ? theme.accent : theme.textSecondary}
                 />
-              )}
-              <Ionicons
-                name={focused ? meta.activeIcon : meta.icon}
-                size={22}
-                color={focused ? theme.accent : theme.textSecondary}
-              />
-            </View>
+              </View>
 
-            <ThemedText
-              type="small"
-              style={[
-                styles.label,
-                {
-                  color: focused ? theme.accent : theme.textSecondary,
-                  fontWeight: focused ? '700' : '500',
-                },
-              ]}>
-              {meta.label}
-            </ThemedText>
-          </Pressable>
-        );
-      })}
+              <ThemedText
+                type="small"
+                style={[
+                  styles.label,
+                  {
+                    color: focused ? theme.accent : theme.textSecondary,
+                    fontWeight: focused ? '700' : '500',
+                  },
+                ]}>
+                {meta.label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
+  outer: {
+    paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
-    paddingHorizontal: Spacing.two,
+  },
+  island: {
+    flexDirection: 'row',
+    borderRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.one,
+    // Lift it off the background.
+    ...Platform.select({
+      android: { elevation: 8 },
+      default: {
+        shadowOpacity: 0.14,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 6 },
+      },
+    }),
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     gap: Spacing.half,
-    // Comfortably above the 48dp Android minimum touch target.
     paddingVertical: Spacing.one,
+    borderRadius: 20,
   },
   pillSlot: {
-    width: 64,
-    height: 32,
+    width: 56,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pill: {
     ...StyleSheet.absoluteFill,
-    borderRadius: 16,
+    borderRadius: 15,
   },
   label: {
     fontSize: 11,
