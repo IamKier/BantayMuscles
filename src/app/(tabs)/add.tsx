@@ -5,7 +5,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -389,6 +391,9 @@ export default function AddScreen() {
   return (
     <ThemedView style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
           <View style={styles.headerText}>
             <ThemedText style={styles.heading}>Add food</ThemedText>
@@ -515,6 +520,7 @@ export default function AddScreen() {
             </Card>
           }
         />
+        </KeyboardAvoidingView>
       </SafeAreaView>
 
       {picked && (
@@ -550,6 +556,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  flex: {
     flex: 1,
   },
   header: {
