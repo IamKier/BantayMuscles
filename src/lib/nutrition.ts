@@ -106,6 +106,47 @@ export function macroGoals(profile: Profile): Macros {
   return { calories, protein, carbs, fat };
 }
 
+/** Body Mass Index (kg/m²). */
+export function bmi(profile: Profile): number {
+  const meters = profile.heightCm / 100;
+  if (meters <= 0) return 0;
+  return profile.weightKg / (meters * meters);
+}
+
+export function bmiCategory(value: number): string {
+  if (value < 18.5) return 'Underweight';
+  if (value < 25) return 'Normal';
+  if (value < 30) return 'Overweight';
+  return 'Obese';
+}
+
+export type TdeeTarget = {
+  key: string;
+  label: string;
+  /** Weekly weight change this pace implies, in kg (negative = loss). */
+  weeklyKg: number;
+  calories: number;
+};
+
+/**
+ * Calorie targets for a range of paces around maintenance, the way a TDEE
+ * calculator presents them. ~7700 kcal ≈ 1 kg, so 0.5 kg/week ≈ 550 kcal/day —
+ * rounded to the familiar 250 / 500 / 1000 steps. Floored at 1200 kcal so an
+ * aggressive deficit can't drop into unsafe territory.
+ */
+export function tdeeTargets(profile: Profile): TdeeTarget[] {
+  const maintenance = Math.round(tdee(profile));
+  const floor = (kcal: number) => Math.max(1200, kcal);
+  return [
+    { key: 'loss-1', label: 'Fast loss', weeklyKg: -1, calories: floor(maintenance - 1000) },
+    { key: 'loss-0.5', label: 'Weight loss', weeklyKg: -0.5, calories: floor(maintenance - 500) },
+    { key: 'loss-0.25', label: 'Mild loss', weeklyKg: -0.25, calories: floor(maintenance - 250) },
+    { key: 'maintain', label: 'Maintain', weeklyKg: 0, calories: maintenance },
+    { key: 'gain-0.25', label: 'Mild gain', weeklyKg: 0.25, calories: maintenance + 250 },
+    { key: 'gain-0.5', label: 'Weight gain', weeklyKg: 0.5, calories: maintenance + 500 },
+  ];
+}
+
 export const EMPTY_MACROS: Macros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
 export function sumMacros(items: Macros[]): Macros {

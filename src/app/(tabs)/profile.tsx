@@ -5,13 +5,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackupCard } from '@/components/backup-card';
 import { Card } from '@/components/card';
+import { TdeeCard } from '@/components/tdee-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MacroColors, Spacing } from '@/constants/theme';
 import { updateProfile, useGoals, useProfile } from '@/hooks/use-store';
 import { useTheme } from '@/hooks/use-theme';
 import { THEME_OPTIONS, useThemePreference } from '@/hooks/use-theme-preference';
-import { ACTIVITY_LEVELS, GOALS, Sex, bmr, tdee } from '@/lib/nutrition';
+import { ACTIVITY_LEVELS, GOALS, Sex } from '@/lib/nutrition';
 
 function NumberField({
   label,
@@ -160,11 +161,9 @@ export default function ProfileScreen() {
                 {goals.fat}g fat
               </ThemedText>
             </View>
-            <ThemedText type="small" themeColor="textSecondary">
-              BMR {Math.round(bmr(profile)).toLocaleString()} · maintenance{' '}
-              {Math.round(tdee(profile)).toLocaleString()} kcal
-            </ThemedText>
           </Card>
+
+          <TdeeCard />
 
           <Card>
             <ThemedText style={styles.cardTitle}>About you</ThemedText>
