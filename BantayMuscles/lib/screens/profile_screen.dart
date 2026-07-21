@@ -127,6 +127,10 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          const _CustomTargetCard(),
+          const SizedBox(height: 16),
+          const _WeightCard(),
+          const SizedBox(height: 16),
           // Appearance
           AppCard(
             child: Column(
@@ -154,6 +158,239 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          const _BackupCard(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Log today's body weight and see recent history. The latest entry also becomes
+/// the profile weight used for goal math.
+class _WeightCard extends StatefulWidget {
+  const _WeightCard();
+
+  @override
+  State<_WeightCard> createState() => _WeightCardState();
+}
+
+class _WeightCardState extends State<_WeightCard> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _log(AppStore store) {
+    final kg = double.tryParse(_controller.text.trim());
+    if (kg == null || kg <= 0) return;
+    store.setWeightForDate(toDateKey(DateTime.now()), kg);
+    _controller.clear();
+    FocusScope.of(context).unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<AppStore>();
+    final colors = context.colors;
+    // Most recent entries first.
+    final recent = (store.weights.entries.toList()
+          ..sort((a, b) => b.key.compareTo(a.key)))
+        .take(5)
+        .toList();
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Weight', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(
+            store.latestWeight != null
+                ? 'Latest ${store.latestWeight!.toStringAsFixed(1)} kg'
+                : 'No weight logged yet',
+            style: TextStyle(fontSize: 13, color: colors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                decoration: InputDecoration(
+                  hintText: "Today's weight",
+                  suffixText: 'kg',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: colors.border),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onSubmitted: (_) => _log(store),
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              height: 46,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => _log(store),
+                child: const Text('Log', style: TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
+          if (recent.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            for (final e in recent)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(formatDateLabel(e.key), style: TextStyle(color: colors.textSecondary)),
+                    Row(children: [
+                      Text('${e.value.toStringAsFixed(1)} kg',
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(Icons.close, size: 16, color: colors.textSecondary),
+                        onPressed: () => store.removeWeightForDate(e.key),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Override the calculated daily calorie target with a fixed number.
+class _CustomTargetCard extends StatelessWidget {
+  const _CustomTargetCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<AppStore>();
+    final colors = context.colors;
+    final p = store.profile;
+    final custom = p.customCalories != null;
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Custom calorie target',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              Switch(
+                value: custom,
+                activeThumbColor: colors.accent,
+                onChanged: (on) => store.updateProfile(on
+                    ? p.copyWith(customCalories: calorieGoal(p.copyWith(clearCustom: true)))
+                    : p.copyWith(clearCustom: true)),
+              ),
+            ],
+          ),
+          Text(
+            custom
+                ? 'Using a fixed target instead of your calculated goal.'
+                : 'Off — target is calculated from your profile and goal.',
+            style: TextStyle(fontSize: 13, color: colors.textSecondary),
+          ),
+          if (custom) ...[
+            const SizedBox(height: 12),
+            _NumberField(
+              label: 'Target',
+              unit: 'kcal',
+              value: p.customCalories ?? calorieGoal(p),
+              onChanged: (v) => store.updateProfile(p.copyWith(customCalories: v)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Export all data to the clipboard as JSON, or restore from a pasted backup.
+class _BackupCard extends StatelessWidget {
+  const _BackupCard();
+
+  Future<void> _export(BuildContext context, AppStore store) async {
+    await Clipboard.setData(ClipboardData(text: store.exportData()));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Backup copied to clipboard')),
+    );
+  }
+
+  Future<void> _import(BuildContext context, AppStore store) async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!context.mounted) return;
+    final raw = data?.text?.trim() ?? '';
+    final messenger = ScaffoldMessenger.of(context);
+    if (raw.isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('Clipboard is empty')));
+      return;
+    }
+    final ok = store.importData(raw);
+    messenger.showSnackBar(SnackBar(
+      content: Text(ok ? 'Backup restored' : 'That doesn’t look like a valid backup'),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.read<AppStore>();
+    final colors = context.colors;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Backup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('Copy all your data as JSON, or restore from a pasted backup.',
+              style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: colors.border),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                icon: Icon(Icons.copy, size: 18, color: colors.text),
+                label: Text('Export', style: TextStyle(color: colors.text)),
+                onPressed: () => _export(context, store),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: colors.border),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                icon: Icon(Icons.paste, size: 18, color: colors.text),
+                label: Text('Import', style: TextStyle(color: colors.text)),
+                onPressed: () => _import(context, store),
+              ),
+            ),
+          ]),
         ],
       ),
     );

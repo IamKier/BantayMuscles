@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'models/nutrition.dart';
+import 'pedometer_service.dart';
 import 'screens/add_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/progress_screen.dart';
@@ -60,6 +61,20 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   MealType _addMeal = MealType.breakfast;
+  late final PedometerService _pedometer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pedometer = PedometerService(context.read<AppStore>());
+    _pedometer.start();
+  }
+
+  @override
+  void dispose() {
+    _pedometer.dispose();
+    super.dispose();
+  }
 
   static const _tabs = [
     _TabDef('Today', Icons.today_outlined, Icons.today),
@@ -82,13 +97,16 @@ class _HomeShellState extends State<HomeShell> {
       const ProfileScreen(),
     ];
 
-    return Scaffold(
-      extendBody: true,
-      body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: _IslandNav(
-        tabs: _tabs,
-        index: _index,
-        onSelect: (i) => setState(() => _index = i),
+    return ChangeNotifierProvider<PedometerService>.value(
+      value: _pedometer,
+      child: Scaffold(
+        extendBody: true,
+        body: IndexedStack(index: _index, children: pages),
+        bottomNavigationBar: _IslandNav(
+          tabs: _tabs,
+          index: _index,
+          onSelect: (i) => setState(() => _index = i),
+        ),
       ),
     );
   }

@@ -252,3 +252,21 @@ String shiftDateKey(String key, int days) {
   final parts = key.split('-').map(int.parse).toList();
   return toDateKey(DateTime(parts[0], parts[1], parts[2] + days));
 }
+
+/// A friendly label for a YYYY-MM-DD key: Today / Yesterday / Tomorrow, else
+/// a short "Wed, Jul 21" form.
+String formatDateLabel(String key) {
+  final today = toDateKey(DateTime.now());
+  if (key == today) return 'Today';
+  if (key == shiftDateKey(today, -1)) return 'Yesterday';
+  if (key == shiftDateKey(today, 1)) return 'Tomorrow';
+
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final parts = key.split('-').map(int.parse).toList();
+  final d = DateTime(parts[0], parts[1], parts[2]);
+  return '${weekdays[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
+}

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../activity.dart';
 import '../models/nutrition.dart';
+import '../pedometer_service.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/app_card.dart';
@@ -91,6 +93,8 @@ class TodayScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                _StepsCard(date: date),
                 const SizedBox(height: 16),
                 if (entries.isEmpty) ...[
                   AppCard(
@@ -195,4 +199,142 @@ class _MealSection extends StatelessWidget {
   }
 
   String _trim(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+}
+
+/// Steps for the day: hardware pedometer total (while the app is open) plus a
+/// manual override, with calories burned and distance.
+class _StepsCard extends StatelessWidget {
+  final String date;
+  const _StepsCard({required this.date});
+
+  bool get _isToday => date == toDateKey(DateTime.now());
+
+  Future<void> _editManual(BuildContext context, AppStore store, int current) async {
+    final controller = TextEditingController(text: current > 0 ? '$current' : '');
+    final value = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Set steps'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(hintText: 'Steps', suffixText: 'steps'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final digits = controller.text.replaceAll(RegExp(r'[^0-9]'), '');
+              Navigator.pop(ctx, int.tryParse(digits) ?? 0);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (value != null) store.setStepsForDate(date, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<AppStore>();
+    final colors = context.colors;
+    final steps = store.stepsForDate(date);
+    const goal = kDefaultStepGoal;
+    final burned = caloriesFromSteps(steps, store.profile.weightKg);
+    final km = distanceFromSteps(steps, store.profile.heightCm);
+    final progress = (steps / goal).clamp(0.0, 1.0);
+
+    // Pedometer status only makes sense for today (it counts live).
+    final status = _isToday ? context.watch<PedometerService>().status : null;
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(children: [
+                Icon(Icons.directions_walk, size: 18, color: colors.textSecondary),
+                const SizedBox(width: 8),
+                const Text('Steps', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              ]),
+              if (status != null) _StatusChip(status: status),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('$steps',
+                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
+              const SizedBox(width: 6),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('/ $goal',
+                    style: TextStyle(fontSize: 14, color: colors.textSecondary)),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => _editManual(context, store, steps),
+                icon: Icon(Icons.edit, size: 16, color: colors.accent),
+                label: Text('Set', style: TextStyle(color: colors.accent, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: colors.track,
+              valueColor: AlwaysStoppedAnimation(colors.accent),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text('$burned kcal burned · ${km.toStringAsFixed(2)} km',
+              style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+          if (status == PedometerStatus.denied)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Enable activity permission to auto-count steps, or set them manually.',
+                  style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+            ),
+          if (status == PedometerStatus.unavailable)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('No step sensor detected — enter steps manually.',
+                  style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  final PedometerStatus status;
+  const _StatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final (label, color) = switch (status) {
+      PedometerStatus.active => ('Auto', colors.accent),
+      PedometerStatus.checking => ('…', colors.textSecondary),
+      PedometerStatus.denied => ('Manual', colors.textSecondary),
+      PedometerStatus.unavailable => ('Manual', colors.textSecondary),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.accentMuted,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+    );
+  }
 }

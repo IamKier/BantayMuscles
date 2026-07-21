@@ -1,6 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Online food search (Open Food Facts) needs network access at runtime. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Barcode scanning uses the camera. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- Hardware pedometer (step counting) on Android 10+. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+    <uses-feature android:name="android.hardware.sensor.stepcounter" android:required="false"/>
     <application
-        android:label="bantaymuscles"
+        android:label="BantayMuscles"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -1,10 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../foods.dart';
 import '../models/nutrition.dart';
+import '../online_search.dart';
 import '../store.dart';
 import '../theme.dart';
+import 'barcode_scanner_screen.dart';
 
 class AddScreen extends StatefulWidget {
   final MealType initialMeal;
@@ -19,10 +22,60 @@ class _AddScreenState extends State<AddScreen> {
   late MealType _meal = widget.initialMeal;
   String _query = '';
 
+  // Online (Open Food Facts) search state. A short debounce keeps us from
+  // firing a request on every keystroke; a token guards against a slow early
+  // response landing after a newer query.
+  Timer? _debounce;
+  int _searchToken = 0;
+  bool _searching = false;
+  String? _onlineError;
+  List<Food> _online = const [];
+
   @override
   void didUpdateWidget(AddScreen old) {
     super.didUpdateWidget(old);
     if (old.initialMeal != widget.initialMeal) _meal = widget.initialMeal;
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onQueryChanged(String value) {
+    setState(() => _query = value);
+    _debounce?.cancel();
+    final q = value.trim();
+    if (q.length < 2) {
+      setState(() {
+        _searching = false;
+        _onlineError = null;
+        _online = const [];
+      });
+      return;
+    }
+    setState(() => _searching = true);
+    _debounce = Timer(const Duration(milliseconds: 400), () => _runOnline(q));
+  }
+
+  Future<void> _runOnline(String q) async {
+    final token = ++_searchToken;
+    final result = await searchOnline(q);
+    if (!mounted || token != _searchToken) return; // a newer query superseded us
+    setState(() {
+      _searching = false;
+      _onlineError = result.ok ? null : result.error;
+      _online = result.foods;
+    });
+  }
+
+  Future<void> _scanBarcode() async {
+    final food = await Navigator.of(context).push<Food>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (food == null || !mounted) return;
+    _pick(food);
   }
 
   void _pick(Food food) async {
@@ -53,7 +106,7 @@ class _AddScreenState extends State<AddScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final results = searchFoods(_query);
+    final results = context.watch<AppStore>().searchCatalog(_query);
 
     return SafeArea(
       bottom: false,
@@ -68,23 +121,44 @@ class _AddScreenState extends State<AddScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                TextField(
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: InputDecoration(
-                    hintText: 'Search foods',
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: colors.surface,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: colors.border),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        onChanged: _onQueryChanged,
+                        decoration: InputDecoration(
+                          hintText: 'Search foods',
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: colors.surface,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: colors.border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: colors.border),
+                          ),
+                        ),
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
+                    const SizedBox(width: 8),
+                    // Scan a product barcode → Open Food Facts lookup.
+                    Material(
+                      color: colors.accentMuted,
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: colors.border),
+                      child: InkWell(
+                        onTap: _scanBarcode,
+                        borderRadius: BorderRadius.circular(14),
+                        child: SizedBox(
+                          width: 52,
+                          height: 52,
+                          child: Icon(Icons.qr_code_scanner, color: colors.accent),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -106,29 +180,136 @@ class _AddScreenState extends State<AddScreen> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
+            child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-              itemCount: results.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: colors.border),
-              itemBuilder: (context, i) {
-                final f = results[i];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  onTap: () => _pick(f),
-                  title: Text(f.name),
-                  subtitle: Text('${f.serving} · P${f.protein} C${f.carbs} F${f.fat}',
-                      style: TextStyle(color: colors.textSecondary)),
-                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text('${f.calories}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    const SizedBox(width: 8),
-                    Icon(Icons.add_circle, color: colors.accent),
-                  ]),
-                );
-              },
+              children: [
+                for (final f in results) ...[
+                  _FoodRow(food: f, onTap: () => _pick(f)),
+                  Divider(height: 1, color: colors.border),
+                ],
+                _OnlineSection(
+                  query: _query,
+                  searching: _searching,
+                  error: _onlineError,
+                  foods: _online,
+                  localCount: results.length,
+                  onPick: _pick,
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A single food row — shared by the local catalog and online results.
+class _FoodRow extends StatelessWidget {
+  final Food food;
+  final VoidCallback onTap;
+  final bool online;
+  const _FoodRow({required this.food, required this.onTap, this.online = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      onTap: onTap,
+      title: Row(children: [
+        Flexible(child: Text(food.name, overflow: TextOverflow.ellipsis)),
+        if (online) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: colors.accentMuted,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text('online',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: colors.accent)),
+          ),
+        ],
+      ]),
+      subtitle: Text('${food.serving} · P${food.protein} C${food.carbs} F${food.fat}',
+          style: TextStyle(color: colors.textSecondary)),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text('${food.calories}', style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(width: 8),
+        Icon(Icons.add_circle, color: colors.accent),
+      ]),
+    );
+  }
+}
+
+/// The "Online results" block: a header, plus a spinner, error, empty note, or
+/// the Open Food Facts matches.
+class _OnlineSection extends StatelessWidget {
+  final String query;
+  final bool searching;
+  final String? error;
+  final List<Food> foods;
+  final int localCount;
+  final void Function(Food) onPick;
+  const _OnlineSection({
+    required this.query,
+    required this.searching,
+    required this.error,
+    required this.foods,
+    required this.localCount,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    if (query.trim().length < 2) return const SizedBox.shrink();
+
+    Widget body;
+    if (searching) {
+      body = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Row(children: [
+          const SizedBox(
+              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 12),
+          Text('Searching Open Food Facts…', style: TextStyle(color: colors.textSecondary)),
+        ]),
+      );
+    } else if (error != null) {
+      body = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text(error!, style: TextStyle(color: colors.textSecondary)),
+      );
+    } else if (foods.isEmpty) {
+      body = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text('No online matches. Try Quick add.',
+            style: TextStyle(color: colors.textSecondary)),
+      );
+    } else {
+      body = Column(
+        children: [
+          for (final f in foods) ...[
+            _FoodRow(food: f, online: true, onTap: () => onPick(f)),
+            Divider(height: 1, color: colors.border),
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(top: localCount > 0 ? 20 : 8, bottom: 4),
+          child: Text('ONLINE (OPEN FOOD FACTS)',
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: colors.textSecondary, letterSpacing: 0.5)),
+        ),
+        body,
+      ],
     );
   }
 }

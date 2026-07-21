@@ -33,6 +33,15 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local secrets — real Supabase values live here (see remote_config.example.dart)
+/lib/remote_config.dart
+
+# Release signing — NEVER commit the keystore or its passwords. Back them up
+# somewhere safe: losing them means you can't ship updates to the same app.
+/android/key.properties
+**/*.jks
+**/*.keystore
+
 # Symbolication related
 app.*.symbols
 

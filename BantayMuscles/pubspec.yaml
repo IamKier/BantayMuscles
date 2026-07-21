@@ -14,11 +14,32 @@ dependencies:
   shared_preferences: ^2.3.2 # local persistence (like AsyncStorage)
   http: ^1.2.2              # Open Food Facts calls
   fl_chart: ^0.69.0         # progress charts / donut
+  mobile_scanner: ^5.2.3    # barcode scanning (camera)
+  pedometer: ^4.0.2         # hardware step counting
+  permission_handler: ^11.3.1 # runtime activity-recognition permission
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
+
+# App icon — the BantayMuscles "BM" logo shared with the Expo app.
+# Regenerate with: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon/bm-icon.png"
+  android: true
+  adaptive_icon_background: "#E4E2DD"
+  adaptive_icon_foreground: "assets/icon/bm-adaptive.png"
+  web:
+    generate: true
+    image_path: "assets/icon/bm-icon.png"
+    background_color: "#E4E2DD"
+    theme_color: "#1552CF"
+  windows:
+    generate: true
+    image_path: "assets/icon/bm-icon.png"
+    icon_size: 256
