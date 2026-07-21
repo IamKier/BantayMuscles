@@ -15,6 +15,7 @@
       "package": "com.bantaymuscles.app",
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
+        "android.permission.INTERNET",
         "android.permission.ACTIVITY_RECOGNITION"
       ],
       "blockedPermissions": [

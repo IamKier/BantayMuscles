@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
 import { useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -17,7 +18,28 @@ function ImportSheet({ onClose }: { onClose: () => void }) {
 
   async function pasteFromClipboard() {
     const text = await Clipboard.getStringAsync();
-    if (text) setValue(text);
+    if (text) {
+      setValue(text);
+      setError(null);
+    }
+  }
+
+  async function chooseFile() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/json', 'text/plain', '*/*'],
+        copyToCacheDirectory: true,
+      });
+      const asset = result.assets?.[0];
+      if (result.canceled || !asset) return;
+      // Read the picked file. fetch handles the cache file:// URI without
+      // depending on the version-specific expo-file-system API.
+      const text = await (await fetch(asset.uri)).text();
+      setValue(text);
+      setError(null);
+    } catch {
+      setError('Couldn’t read that file. Try paste instead.');
+    }
   }
 
   function confirm() {
@@ -39,15 +61,31 @@ function ImportSheet({ onClose }: { onClose: () => void }) {
           This replaces everything currently on this device.
         </ThemedText>
 
-        <Pressable
-          onPress={pasteFromClipboard}
-          style={[styles.pasteButton, { borderColor: theme.border }]}
-          android_ripple={{ color: theme.backgroundSelected }}>
-          <Ionicons name="clipboard-outline" size={16} color={theme.accent} />
-          <ThemedText type="smallBold" style={{ color: theme.accent }}>
-            Paste from clipboard
-          </ThemedText>
-        </Pressable>
+        <View style={styles.sourceRow}>
+          <Pressable
+            onPress={chooseFile}
+            style={[styles.pasteButton, { borderColor: theme.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Choose a backup file"
+            android_ripple={{ color: theme.backgroundSelected }}>
+            <Ionicons name="document-outline" size={16} color={theme.accent} />
+            <ThemedText type="smallBold" style={{ color: theme.accent }}>
+              Choose file
+            </ThemedText>
+          </Pressable>
+
+          <Pressable
+            onPress={pasteFromClipboard}
+            style={[styles.pasteButton, { borderColor: theme.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Paste from clipboard"
+            android_ripple={{ color: theme.backgroundSelected }}>
+            <Ionicons name="clipboard-outline" size={16} color={theme.accent} />
+            <ThemedText type="smallBold" style={{ color: theme.accent }}>
+              Paste
+            </ThemedText>
+          </Pressable>
+        </View>
 
         <TextInput
           value={value}
@@ -179,7 +217,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
+  sourceRow: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+  },
   pasteButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

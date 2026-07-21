@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { Tabs } from 'expo-router';
-import type { ComponentProps } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useState, type ComponentProps } from 'react';
+import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -16,6 +16,20 @@ import { useTheme } from '@/hooks/use-theme';
  * actual `Tabs` component so this can't drift.
  */
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
+
+/** Hidden while the keyboard is open so the floating bar can't sit over an input. */
+function useKeyboardVisible() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return visible;
+}
 
 type TabMeta = {
   label: string;
@@ -42,6 +56,11 @@ const TABS: Record<string, TabMeta> = {
 export function AppTabBar({ state, navigation }: TabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useKeyboardVisible();
+
+  // Typing (e.g. food search) shouldn't leave the island stranded above the
+  // keyboard — drop it while typing, restore it when the keyboard closes.
+  if (keyboardVisible) return null;
 
   return (
     <View
@@ -49,7 +68,8 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
         styles.outer,
         {
           backgroundColor: theme.background,
-          paddingBottom: Math.max(insets.bottom, Spacing.three),
+          // Float it clearly above the very bottom, like the reference pill.
+          paddingBottom: Math.max(insets.bottom, Spacing.four),
         },
       ]}>
       <View
@@ -123,15 +143,17 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
 
 const styles = StyleSheet.create({
   outer: {
-    paddingHorizontal: Spacing.three,
+    // Wider side gaps so the pill reads as detached from the screen edges.
+    paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
   },
   island: {
     flexDirection: 'row',
-    borderRadius: 28,
+    // Fully rounded pill ends, matching the reference.
+    borderRadius: 36,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.one,
+    paddingHorizontal: Spacing.two,
     // Lift it off the background.
     ...Platform.select({
       android: { elevation: 8 },

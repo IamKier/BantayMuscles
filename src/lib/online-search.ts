@@ -14,8 +14,26 @@ import { Food } from '@/lib/nutrition';
 
 const ENDPOINT = 'https://search.openfoodfacts.org/search';
 
-// Open Food Facts asks clients to identify themselves.
-const USER_AGENT = 'FitTracker/1.0 (Expo app)';
+// Open Food Facts requires a descriptive User-Agent and blocks generic ones.
+const USER_AGENT = 'BantayMuscles/1.0 (https://github.com/IamKier/BantayMuscles)';
+
+const TIMEOUT_MS = 12000;
+
+/** fetch with a hard timeout — a hanging request otherwise looks like a frozen app. */
+async function fetchJson(url: string): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(String(response.status));
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 type Hit = {
   code?: string;
@@ -52,13 +70,9 @@ export async function searchOnline(query: string): Promise<OnlineSearchResult> {
 
   let payload: { hits?: Hit[] };
   try {
-    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-    if (!response.ok) {
-      return { ok: false, error: `Search is unavailable right now (${response.status}).` };
-    }
-    payload = await response.json();
+    payload = (await fetchJson(url)) as { hits?: Hit[] };
   } catch {
-    return { ok: false, error: 'Couldn’t reach the food database. Check your connection.' };
+    return { ok: false, error: 'Couldn’t reach the food database. Check your connection and try again.' };
   }
 
   const seen = new Set<string>();
@@ -121,9 +135,7 @@ export async function lookupBarcode(code: string): Promise<BarcodeResult> {
 
   let payload: ProductResponse;
   try {
-    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-    if (!response.ok) return { ok: false, error: `Lookup failed (${response.status}).` };
-    payload = await response.json();
+    payload = (await fetchJson(url)) as ProductResponse;
   } catch {
     return { ok: false, error: 'Couldn’t reach the food database. Check your connection.' };
   }

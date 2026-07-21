@@ -121,9 +121,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   value: {
-    fontSize: 44,
+    fontSize: 46,
     lineHeight: 50,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -1.5,
   },
   detail: {
     marginTop: Spacing.one,

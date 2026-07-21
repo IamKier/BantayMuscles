@@ -214,6 +214,57 @@ function MacroPill({
   );
 }
 
+/**
+ * Isolated search field. It owns the live text and only reports a *debounced*
+ * query up to the parent, so keystrokes re-render this small component — never
+ * the food list. That's what stops the keyboard from lagging while searching.
+ */
+const SearchBar = memo(function SearchBar({
+  onQuery,
+  onSubmit,
+}: {
+  onQuery: (query: string) => void;
+  onSubmit: (text: string) => void;
+}) {
+  const theme = useTheme();
+  const [value, setValue] = useState('');
+
+  // Kept in a ref so the debounce timer doesn't reset when the parent passes a
+  // new callback identity between renders.
+  const onQueryRef = useRef(onQuery);
+  onQueryRef.current = onQuery;
+
+  useEffect(() => {
+    const handle = setTimeout(() => onQueryRef.current(value.trim()), 200);
+    return () => clearTimeout(handle);
+  }, [value]);
+
+  return (
+    <View
+      style={[
+        styles.searchBox,
+        { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+      ]}>
+      <Ionicons name="search" size={18} color={theme.textSecondary} />
+      <TextInput
+        value={value}
+        onChangeText={setValue}
+        placeholder="Search foods"
+        placeholderTextColor={theme.textSecondary}
+        style={[styles.searchInput, { color: theme.text }]}
+        returnKeyType="search"
+        autoCorrect={false}
+        onSubmitEditing={() => onSubmit(value)}
+      />
+      {value.length > 0 && (
+        <Pressable onPress={() => setValue('')} hitSlop={10} accessibilityLabel="Clear search">
+          <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
+        </Pressable>
+      )}
+    </View>
+  );
+});
+
 export default function AddScreen() {
   const theme = useTheme();
   const selectedDate = useSelectedDate();
@@ -225,10 +276,9 @@ export default function AddScreen() {
   const params = useLocalSearchParams<{ meal?: MealType }>();
 
   const [meal, setMeal] = useState<MealType>(params.meal ?? 'breakfast');
-  // `text` updates on every keystroke so the input stays responsive; `query` is
-  // debounced and is what actually drives the (heavier) list filter. Keeping the
-  // two apart stops the per-character list re-render that flickers the keyboard.
-  const [text, setText] = useState('');
+  // `query` is the *debounced* search term, set by the isolated SearchBar. The
+  // live keystrokes never reach this component, so typing doesn't re-render the
+  // food list — that's what keeps the keyboard smooth.
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Food | null>(null);
   const [quickAdd, setQuickAdd] = useState(false);
@@ -236,11 +286,6 @@ export default function AddScreen() {
   const [online, setOnline] = useState<Food[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handle = setTimeout(() => setQuery(text.trim()), 180);
-    return () => clearTimeout(handle);
-  }, [text]);
 
   const local = useMemo(() => filterFoods(foods, query), [foods, query]);
   const results = useMemo(() => [...local, ...online], [local, online]);
@@ -266,12 +311,12 @@ export default function AddScreen() {
     [foods, searching]
   );
 
-  function updateQuery(value: string) {
-    setText(value);
+  const handleQueryChange = useCallback((value: string) => {
+    setQuery(value);
     // Online results belong to the previous query — drop them.
     setOnline((current) => (current.length ? [] : current));
     setSearchError(null);
-  }
+  }, []);
 
   const handlePick = useCallback((food: Food) => setPicked(food), []);
 
@@ -362,28 +407,7 @@ export default function AddScreen() {
         </View>
 
         <View style={styles.headerBody}>
-          <View
-            style={[
-              styles.searchBox,
-              { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-            ]}>
-            <Ionicons name="search" size={18} color={theme.textSecondary} />
-            <TextInput
-              value={text}
-              onChangeText={updateQuery}
-              placeholder="Search foods"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.searchInput, { color: theme.text }]}
-              returnKeyType="search"
-              onSubmitEditing={() => runOnlineSearch(text)}
-            />
-            {text.length > 0 && (
-              <Pressable onPress={() => updateQuery('')} hitSlop={10}>
-                <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
-              </Pressable>
-            )}
-          </View>
-
+          <SearchBar onQuery={handleQueryChange} onSubmit={runOnlineSearch} />
           <MealChips value={meal} onChange={setMeal} />
         </View>
 
@@ -394,7 +418,7 @@ export default function AddScreen() {
           contentContainerStyle={styles.list}
           renderItem={({ item }) => <FoodRow food={item} onPress={handlePick} />}
           ListHeaderComponent={
-            text.trim().length === 0 && recents.length > 0 ? (
+            query.length === 0 && recents.length > 0 ? (
               <View style={styles.recents}>
                 <ThemedText type="smallBold" themeColor="textSecondary" style={styles.recentsLabel}>
                   Recent
