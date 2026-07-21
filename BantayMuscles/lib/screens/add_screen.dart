@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../ai_logging.dart';
 import '../models/nutrition.dart';
 import '../online_search.dart';
 import '../store.dart';
@@ -32,12 +31,6 @@ class _AddScreenState extends State<AddScreen> {
   String? _onlineError;
   List<Food> _online = const [];
 
-  // AI (natural-language) logging state.
-  final _aiController = TextEditingController();
-  bool _aiLoading = false;
-  String? _aiError;
-  List<Food> _aiFoods = const [];
-
   @override
   void didUpdateWidget(AddScreen old) {
     super.didUpdateWidget(old);
@@ -47,26 +40,7 @@ class _AddScreenState extends State<AddScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
-    _aiController.dispose();
     super.dispose();
-  }
-
-  Future<void> _runAi() async {
-    final text = _aiController.text.trim();
-    if (text.length < 2 || _aiLoading) return;
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _aiLoading = true;
-      _aiError = null;
-      _aiFoods = const [];
-    });
-    final result = await parseMeal(text);
-    if (!mounted) return;
-    setState(() {
-      _aiLoading = false;
-      _aiError = result.ok ? null : result.error;
-      _aiFoods = result.foods;
-    });
   }
 
   void _onQueryChanged(String value) {
@@ -227,54 +201,6 @@ class _AddScreenState extends State<AddScreen> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                // Natural-language logging: describe a meal, Gemini estimates it.
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _aiController,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _runAi(),
-                        decoration: InputDecoration(
-                          hintText: 'Describe a meal — “2 itlog, kanin, adobo”',
-                          prefixIcon: Icon(Icons.auto_awesome, color: colors.accent),
-                          filled: true,
-                          fillColor: colors.surface,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: colors.border),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: colors.border),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 52,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colors.accent,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                        ),
-                        onPressed: _aiLoading ? null : _runAi,
-                        child: _aiLoading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF04120A)),
-                              )
-                            : const Text('Log AI',
-                                style: TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -319,12 +245,6 @@ class _AddScreenState extends State<AddScreen> {
                     ),
                   ),
                 ),
-                _AiSection(
-                  loading: _aiLoading,
-                  error: _aiError,
-                  foods: _aiFoods,
-                  onPick: _pick,
-                ),
                 for (final f in results) ...[
                   _FoodRow(food: f, onTap: () => _pick(f)),
                   Divider(height: 1, color: colors.border),
@@ -346,79 +266,17 @@ class _AddScreenState extends State<AddScreen> {
   }
 }
 
-/// AI-parsed meal results: a header plus each estimated food, badged "AI".
-class _AiSection extends StatelessWidget {
-  final bool loading;
-  final String? error;
-  final List<Food> foods;
-  final void Function(Food) onPick;
-  const _AiSection({
-    required this.loading,
-    required this.error,
-    required this.foods,
-    required this.onPick,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    if (!loading && error == null && foods.isEmpty) return const SizedBox.shrink();
-
-    Widget body;
-    if (loading) {
-      body = Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Row(children: [
-          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-          const SizedBox(width: 12),
-          Text('Estimating with AI…', style: TextStyle(color: colors.textSecondary)),
-        ]),
-      );
-    } else if (error != null) {
-      body = Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text(error!, style: TextStyle(color: colors.textSecondary)),
-      );
-    } else {
-      body = Column(children: [
-        for (final f in foods) ...[
-          _FoodRow(food: f, badge: 'AI', onTap: () => onPick(f)),
-          Divider(height: 1, color: colors.border),
-        ],
-      ]);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 4),
-          child: Row(children: [
-            Icon(Icons.auto_awesome, size: 14, color: colors.accent),
-            const SizedBox(width: 6),
-            Text('AI ESTIMATE',
-                style: TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700, color: colors.textSecondary, letterSpacing: 0.5)),
-          ]),
-        ),
-        body,
-      ],
-    );
-  }
-}
-
-/// A single food row — shared by the local catalog, online, and AI results.
+/// A single food row — shared by the local catalog and online results.
 class _FoodRow extends StatelessWidget {
   final Food food;
   final VoidCallback onTap;
   final bool online;
-  final String? badge;
-  const _FoodRow({required this.food, required this.onTap, this.online = false, this.badge});
+  const _FoodRow({required this.food, required this.onTap, this.online = false});
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final label = badge ?? (online ? 'online' : null);
+    final label = online ? 'online' : null;
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: onTap,

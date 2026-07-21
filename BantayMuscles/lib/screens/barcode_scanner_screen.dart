@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../models/nutrition.dart';
 import '../online_search.dart';
@@ -17,14 +18,11 @@ class BarcodeScannerScreen extends StatefulWidget {
 enum _Status { scanning, looking, error }
 
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
-  final _controller = MobileScannerController(
-    formats: const [
-      BarcodeFormat.ean13,
-      BarcodeFormat.ean8,
-      BarcodeFormat.upcA,
-      BarcodeFormat.upcE,
-    ],
-  );
+  MobileScannerController? _controller;
+
+  // Camera permission is resolved before the camera is created, so the OS
+  // prompt always fires and a denial gets a clear, actionable screen.
+  PermissionStatus? _camPermission;
 
   _Status _status = _Status.scanning;
   String? _message;
@@ -32,8 +30,32 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   bool _handled = false;
 
   @override
+  void initState() {
+    super.initState();
+    _requestCamera();
+  }
+
+  Future<void> _requestCamera() async {
+    final status = await Permission.camera.request();
+    if (!mounted) return;
+    setState(() {
+      _camPermission = status;
+      if (status.isGranted) {
+        _controller = MobileScannerController(
+          formats: const [
+            BarcodeFormat.ean13,
+            BarcodeFormat.ean8,
+            BarcodeFormat.upcA,
+            BarcodeFormat.upcE,
+          ],
+        );
+      }
+    });
+  }
+
+  @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -95,68 +117,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      MobileScanner(
-                        controller: _controller,
-                        onDetect: _onDetect,
-                        errorBuilder: (context, error, _) => _CameraError(error: error),
-                      ),
-                      // Aiming reticle.
-                      IgnorePointer(
-                        child: Center(
-                          child: FractionallySizedBox(
-                            widthFactor: 0.78,
-                            heightFactor: 0.38,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(color: colors.accent, width: 3),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (_status != _Status.scanning)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            color: const Color(0xB0000000),
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (_status == _Status.looking) ...[
-                                  const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                                  const SizedBox(width: 12),
-                                  const Flexible(
-                                    child: Text('Looking it up…',
-                                        style: TextStyle(color: Colors.white)),
-                                  ),
-                                ] else ...[
-                                  Flexible(
-                                    child: Text(_message ?? 'Not found',
-                                        style: const TextStyle(color: Colors.white)),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  TextButton(
-                                    onPressed: _scanAgain,
-                                    child: Text('Scan again',
-                                        style: TextStyle(color: colors.accent, fontWeight: FontWeight.w700)),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  child: _buildCameraArea(colors),
                 ),
               ),
             ),
@@ -174,36 +135,105 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       ),
     );
   }
-}
 
-class _CameraError extends StatelessWidget {
-  final MobileScannerException error;
-  const _CameraError({required this.error});
+  Widget _buildCameraArea(AppColors colors) {
+    // Still resolving the permission prompt.
+    if (_camPermission == null) {
+      return const ColoredBox(
+        color: Colors.black,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final denied = error.errorCode == MobileScannerErrorCode.permissionDenied;
-    return ColoredBox(
-      color: Colors.black,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.camera_alt_outlined, size: 40, color: Colors.white70),
-              const SizedBox(height: 12),
-              Text(
-                denied
-                    ? 'Camera access is needed to scan barcodes. Enable it in Settings.'
-                    : 'Camera unavailable. Try Quick add instead.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70),
-              ),
-            ],
+    // Denied — offer a retry, or a jump to Settings if permanently denied.
+    if (!_camPermission!.isGranted || _controller == null) {
+      final permanentlyDenied = _camPermission!.isPermanentlyDenied;
+      return ColoredBox(
+        color: Colors.black,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.camera_alt_outlined, size: 40, color: Colors.white70),
+                const SizedBox(height: 12),
+                const Text(
+                  'Camera access is needed to scan barcodes.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: colors.accent),
+                  onPressed: permanentlyDenied ? openAppSettings : _requestCamera,
+                  child: Text(
+                    permanentlyDenied ? 'Open settings' : 'Allow camera',
+                    style: const TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+      );
+    }
+
+    // Granted — show the live camera with the reticle + status overlays.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        MobileScanner(controller: _controller!, onDetect: _onDetect),
+        IgnorePointer(
+          child: Center(
+            child: FractionallySizedBox(
+              widthFactor: 0.78,
+              heightFactor: 0.38,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: colors.accent, width: 3),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_status != _Status.scanning)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: const Color(0xB0000000),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_status == _Status.looking) ...[
+                    const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                    const SizedBox(width: 12),
+                    const Flexible(
+                      child: Text('Looking it up…', style: TextStyle(color: Colors.white)),
+                    ),
+                  ] else ...[
+                    Flexible(
+                      child: Text(_message ?? 'Not found', style: const TextStyle(color: Colors.white)),
+                    ),
+                    const SizedBox(width: 12),
+                    TextButton(
+                      onPressed: _scanAgain,
+                      child: Text('Scan again',
+                          style: TextStyle(color: colors.accent, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
