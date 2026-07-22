@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../models/nutrition.dart';
 import '../store.dart';
 import '../theme.dart';
+import '../update_prompt.dart';
+import '../updater.dart';
 import '../widgets/app_card.dart';
 
 const _activityLabels = {
@@ -160,6 +162,67 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const _BackupCard(),
+          const SizedBox(height: 16),
+          const _AboutCard(),
+        ],
+      ),
+    );
+  }
+}
+
+/// App version + a manual "Check for updates" (pulls from GitHub Releases).
+class _AboutCard extends StatefulWidget {
+  const _AboutCard();
+
+  @override
+  State<_AboutCard> createState() => _AboutCardState();
+}
+
+class _AboutCardState extends State<_AboutCard> {
+  String _version = '';
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    currentVersion().then((v) {
+      if (mounted) setState(() => _version = v);
+    });
+  }
+
+  Future<void> _check() async {
+    setState(() => _checking = true);
+    await checkAndPromptUpdate(context, manual: true);
+    if (mounted) setState(() => _checking = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('About', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('BantayMuscles${_version.isNotEmpty ? '  ·  v$_version' : ''}',
+              style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: colors.border),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              icon: _checking
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(Icons.system_update, size: 18, color: colors.text),
+              label: Text(_checking ? 'Checking…' : 'Check for updates',
+                  style: TextStyle(color: colors.text)),
+              onPressed: _checking ? null : _check,
+            ),
+          ),
         ],
       ),
     );

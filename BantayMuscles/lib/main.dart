@@ -9,6 +9,7 @@ import 'screens/progress_screen.dart';
 import 'screens/today_screen.dart';
 import 'store.dart';
 import 'theme.dart';
+import 'update_prompt.dart';
 
 void main() {
   runApp(
@@ -68,6 +69,11 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _pedometer = PedometerService(context.read<AppStore>());
     _pedometer.start();
+    // Check GitHub for a newer release once the first frame is up; stays silent
+    // unless an update exists.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) checkAndPromptUpdate(context);
+    });
   }
 
   @override
